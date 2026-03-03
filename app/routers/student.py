@@ -33,12 +33,6 @@ def student_dashboard(
         .order_by(Submission.uploaded_at.desc())
         .all()
     )
-    submissions = (
-        db.query(Submission)
-        .filter_by(student_id=user.id)
-        .order_by(Submission.uploaded_at.desc())
-        .all()
-    )
 
     return templates.TemplateResponse(
         "student/dashboard.html",
