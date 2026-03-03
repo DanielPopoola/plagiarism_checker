@@ -75,7 +75,7 @@ async def upload_submission(
         raise HTTPException(status_code=404, detail="Exam not found")
 
     now = datetime.now(UTC)
-    if not (exam.opens_at <= now <= exam.closes_at):
+    if not (exam.opens_at <= now.replace(tzinfo=None) <= exam.closes_at):
         raise HTTPException(status_code=400, detail="Submission window is not open")
 
     file_path = _save_file(file, exam)

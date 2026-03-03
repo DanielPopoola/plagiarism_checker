@@ -9,7 +9,7 @@ Patches:
 
 import io
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from unittest.mock import MagicMock, patch
 
 from app.models import AuditAction, AuditLog, JobStatus, PlagiarismJob, ReviewStatus, Submission
@@ -17,7 +17,7 @@ from conftest import auth, txt_upload, oversized_upload, _user, make_user
 
 
 def _now():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # Patch targets — task is imported inside the function body, so patch at source

@@ -59,9 +59,10 @@ def near_copy_fragments():
 
 class TestDispersion:
     def test_uneven_gaps_produce_low_dispersion(self):
-        frags = [make_fragment(0, 5), make_fragment(10, 15), make_fragment(20, 25), make_fragment(220, 225)]
+        # Gaps: [0.002, 0.002, 0.976] — extreme variance → dispersion near 0
+        frags = [make_fragment(0, 1), make_fragment(1, 2), make_fragment(2, 3), make_fragment(490, 491)]
         d = _dispersion(frags, doc_len=500)
-        assert d < 0.5
+        assert d < 0.1
 
     def test_evenly_spread_fragments_high_dispersion(self):
         frags = [make_fragment(i * 100, i * 100 + 5) for i in range(5)]

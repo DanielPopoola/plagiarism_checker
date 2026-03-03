@@ -7,7 +7,7 @@ Covers: token creation, password hashing, JWT decode, role guards,
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from jose import jwt
 
 from app.auth import (
@@ -55,8 +55,8 @@ class TestJWT:
     def test_token_expires_in_configured_window(self, student):
         token = create_token(student.id, student.role)
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
-        expected = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+        exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
+        expected = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
         assert abs((exp - expected).total_seconds()) < 5
 
     def test_decode_returns_correct_user(self, db, student):
@@ -143,7 +143,7 @@ class TestRegisterEndpoint:
 class TestRoleGuards:
     def test_student_cannot_create_exam(self, client, student, course):
         from datetime import datetime, timedelta, timezone
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         r = client.post("/exams/", json={
             "course_id": course.id, "title": "Test",
             "opens_at": (now + timedelta(hours=1)).isoformat(),

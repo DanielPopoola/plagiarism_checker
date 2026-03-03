@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from celery import Celery
 
 celery_app = Celery("plagiarism")
@@ -87,7 +87,7 @@ def run_plagiarism_analysis(self, exam_id: int):
             sub.originality_score = round(1.0 - worst[sub.id], 4)
 
         job.status      = JobStatus.completed
-        job.finished_at = datetime.now(timezone.utc)
+        job.finished_at = datetime.now(UTC)
         db.commit()
 
     except Exception as exc:

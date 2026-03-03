@@ -35,8 +35,8 @@ def list_exams(db: Session = Depends(get_db), user: User = Depends(get_current_u
     if user.role in (Role.lecturer, Role.admin):
         course_ids = [c.id for c in db.query(Course).filter_by(lecturer_id=user.id).all()]
         return db.query(Exam).filter(Exam.course_id.in_(course_ids)).all()
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
+    from datetime import datetime, timezone, UTC
+    now = datetime.now(UTC)
     return db.query(Exam).filter(Exam.opens_at <= now, Exam.closes_at >= now).all()
 
 

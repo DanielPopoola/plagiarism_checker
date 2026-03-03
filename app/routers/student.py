@@ -17,8 +17,8 @@ def student_dashboard(request: Request, db: Session = Depends(get_db), user: Use
     if user.role != Role.student:
         raise HTTPException(status_code=403, detail="Students only")
 
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
+    from datetime import datetime, timezone, UTC
+    now = datetime.now(UTC)
     open_exams = db.query(Exam).filter(Exam.opens_at <= now, Exam.closes_at >= now).all()
     submissions = db.query(Submission).filter_by(student_id=user.id).order_by(Submission.uploaded_at.desc()).all()
 
