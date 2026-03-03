@@ -7,16 +7,15 @@ from .auth import create_token, hash_password, verify_password
 from .database import Base, engine, get_db
 from .models import User
 from .schemas import TokenOut, UserCreate, UserOut
-from .routers import auth, exams, submissions, reports, dashboard
+from .routers import auth, courses, exams, submissions, reports, dashboard, student, admin
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Plagiarism Detection System")
-app.include_router(auth.router)
-app.include_router(exams.router)
-app.include_router(submissions.router)
-app.include_router(reports.router)
-app.include_router(dashboard.router)
+
+for router in [auth.router, courses.router, exams.router, submissions.router,
+               reports.router, dashboard.router, student.router, admin.router]:
+    app.include_router(router)
 
 
 @app.get("/")
@@ -24,9 +23,9 @@ def root():
     return RedirectResponse(url="/login")
 
 
-# JSON API auth (for API clients / Swagger)
+# JSON API auth (Swagger / API clients)
 @app.post("/auth/token", response_model=TokenOut)
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login_api(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter_by(email=form.username).first()
     if not user or not verify_password(form.password, user.hashed_pw):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bad credentials")
@@ -34,7 +33,7 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 
 
 @app.post("/auth/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(body: UserCreate, db: Session = Depends(get_db)):
+def register_api(body: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter_by(email=body.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     user = User(email=body.email, name=body.name, role=body.role, hashed_pw=hash_password(body.password))
