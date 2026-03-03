@@ -1,3 +1,4 @@
+from cryptography.fernet import Fernet
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -9,6 +10,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     upload_dir: str = "uploads"
     max_file_size_mb: int = 10
+
+    fernet_key: str = ""
+    filter_stopwords: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra='ignore')
 

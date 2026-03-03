@@ -6,6 +6,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from .database import Base
+from .encrypted_type import EncryptedText
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -106,7 +107,7 @@ class Submission(Base):
     exam_id          = Column(Integer, ForeignKey("exams.id"), nullable=False)
     student_id       = Column(Integer, ForeignKey("users.id"), nullable=False)
     file_path        = Column(String, nullable=False)
-    extracted_text   = Column(Text)
+    extracted_text   = Column(EncryptedText)
     originality_score = Column(Float)   # 0.0–1.0, populated after analysis. 1.0 = fully original
     uploaded_at      = Column(DateTime(timezone=True), default=utcnow)
 

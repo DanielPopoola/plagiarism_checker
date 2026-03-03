@@ -10,15 +10,10 @@ from ..config import settings
 from ..database import get_db
 from ..models import Exam, JobStatus, PlagiarismJob, Role, Submission, User
 from ..schemas import JobOut, SubmissionOut
+from ..services.crypto import decrypt_file, encrypt_file
 from ..services.extraction import extract_text
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
-
-ALLOWED_MIME = {
-    "pdf":  "application/pdf",
-    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "txt":  "text/plain",
-}
 
 
 def _save_file(file: UploadFile, exam: Exam) -> str:
@@ -44,7 +39,6 @@ def _save_file(file: UploadFile, exam: Exam) -> str:
 
 
 def _upsert_job(exam_id: int, db: Session) -> PlagiarismJob:
-    """Create or reset the plagiarism job for an exam."""
     job = db.query(PlagiarismJob).filter_by(exam_id=exam_id).first()
     if job:
         job.status = JobStatus.pending
@@ -79,7 +73,10 @@ async def upload_submission(
         raise HTTPException(status_code=400, detail="Submission window is not open")
 
     file_path = _save_file(file, exam)
-    text = extract_text(file_path)
+    encrypt_file(file_path)
+    raw_bytes = decrypt_file(file_path)
+    ext = file_path.rsplit(".", 1)[-1].lower()
+    text = extract_text(raw_bytes, ext)
 
     submission = Submission(
         exam_id=exam_id,
@@ -91,7 +88,6 @@ async def upload_submission(
     db.commit()
     db.refresh(submission)
 
-    # Queue analysis job (import here to avoid circular imports)
     job = _upsert_job(exam_id, db)
     from ..tasks.analysis import run_plagiarism_analysis
     task = run_plagiarism_analysis.delay(exam_id)

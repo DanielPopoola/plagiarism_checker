@@ -2,13 +2,15 @@
 tests/test_api.py — API-level tests using FastAPI TestClient + real SQLite.
 
 Patches:
-  - app.tasks.analysis.run_plagiarism_analysis  (Celery task, imported inside handler)
+  - app.tasks.analysis.run_plagiarism_analysis  (Celery task)
   - app.routers.submissions.extract_text        (avoids real file I/O)
-  - app.routers.submissions._save_file          (avoids disk writes for non-upload tests)
+  - app.routers.submissions._save_file          (avoids disk writes)
+  - app.routers.submissions.encrypt_file        (avoids disk reads on mocked paths)
 """
 
 import io
 import pytest
+from contextlib import ExitStack
 from datetime import datetime, timedelta, timezone, UTC
 from unittest.mock import MagicMock, patch
 
@@ -20,16 +22,27 @@ def _now():
     return datetime.now(UTC)
 
 
-# Patch targets — task is imported inside the function body, so patch at source
 TASK_PATH    = "app.tasks.analysis.run_plagiarism_analysis"
 EXTRACT_PATH = "app.routers.submissions.extract_text"
 SAVE_PATH    = "app.routers.submissions._save_file"
+ENCRYPT_PATH = "app.routers.submissions.encrypt_file"
+DECRYPT_PATH = "app.routers.submissions.decrypt_file"
 
 
 def _mock_task():
     m = MagicMock()
     m.delay.return_value.id = "celery-test-id"
     return m
+
+
+def _upload_patches(extracted="extracted text content", path="uploads/1/essay.txt"):
+    return [
+        patch(TASK_PATH, _mock_task()),
+        patch(SAVE_PATH, return_value=path),
+        patch(ENCRYPT_PATH),
+        patch(DECRYPT_PATH, return_value=b"raw file bytes"),
+        patch(EXTRACT_PATH, return_value=extracted),
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -95,9 +108,8 @@ class TestExamCRUD:
 
 class TestSubmissionUpload:
     def test_student_uploads_valid_txt(self, client, student, open_exam):
-        with patch(TASK_PATH, _mock_task()), \
-             patch(SAVE_PATH, return_value="uploads/1/essay.txt"), \
-             patch(EXTRACT_PATH, return_value="extracted text content"):
+        with ExitStack() as stack:
+            for p in _upload_patches(): stack.enter_context(p)
             r = client.post(f"/submissions/{open_exam.id}",
                             files=[txt_upload()], headers=auth(student))
         assert r.status_code == 201
@@ -106,9 +118,8 @@ class TestSubmissionUpload:
 
     def test_submission_stores_extracted_text(self, client, db, student, open_exam):
         extracted = "the mitochondria is the powerhouse of the cell"
-        with patch(TASK_PATH, _mock_task()), \
-             patch(SAVE_PATH, return_value="uploads/1/essay.txt"), \
-             patch(EXTRACT_PATH, return_value=extracted):
+        with ExitStack() as stack:
+            for p in _upload_patches(extracted=extracted): stack.enter_context(p)
             client.post(f"/submissions/{open_exam.id}",
                         files=[txt_upload()], headers=auth(student))
         sub = db.query(Submission).filter_by(exam_id=open_exam.id, student_id=student.id).first()
@@ -119,6 +130,8 @@ class TestSubmissionUpload:
         mock_task = _mock_task()
         with patch(TASK_PATH, mock_task), \
              patch(SAVE_PATH, return_value="uploads/1/essay.txt"), \
+             patch(ENCRYPT_PATH), \
+             patch(DECRYPT_PATH, return_value=b"raw"), \
              patch(EXTRACT_PATH, return_value="content"):
             client.post(f"/submissions/{open_exam.id}",
                         files=[txt_upload()], headers=auth(student))
@@ -140,7 +153,6 @@ class TestSubmissionUpload:
         assert r.status_code == 400
 
     def test_disallowed_file_format_rejected(self, client, student, open_exam):
-        # open_exam allows pdf,docx,txt — csv must be rejected by _save_file
         r = client.post(
             f"/submissions/{open_exam.id}",
             files=[("file", ("essay.csv", io.BytesIO(b"col1,col2"), "text/csv"))],
@@ -164,11 +176,15 @@ class TestSubmissionUpload:
     def test_upserts_job_on_resubmission(self, client, db, student, open_exam):
         with patch(TASK_PATH, _mock_task()), \
              patch(SAVE_PATH, return_value="uploads/1/a.txt"), \
+             patch(ENCRYPT_PATH), \
+             patch(DECRYPT_PATH, return_value=b"raw"), \
              patch(EXTRACT_PATH, return_value="first content"):
             client.post(f"/submissions/{open_exam.id}",
                         files=[txt_upload("first " * 20)], headers=auth(student))
         with patch(TASK_PATH, _mock_task()), \
              patch(SAVE_PATH, return_value="uploads/1/b.txt"), \
+             patch(ENCRYPT_PATH), \
+             patch(DECRYPT_PATH, return_value=b"raw"), \
              patch(EXTRACT_PATH, return_value="second content"):
             client.post(f"/submissions/{open_exam.id}",
                         files=[txt_upload("second " * 20)], headers=auth(student))

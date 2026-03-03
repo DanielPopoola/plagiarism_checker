@@ -1,37 +1,42 @@
+import io
 import re
 import unicodedata
 
+import nltk
 
-def extract_text(file_path: str) -> str:
-    """Extract raw text from PDF, DOCX, or TXT and return normalised string."""
-    ext = file_path.rsplit(".", 1)[-1].lower()
-    raw = _read(ext, file_path)
-    return _normalise(raw)
+from ..config import settings
+
+try:
+    _STOPWORDS = frozenset(nltk.corpus.stopwords.words("english"))
+except LookupError:
+    nltk.download("stopwords", quiet=True)
+    _STOPWORDS = frozenset(nltk.corpus.stopwords.words("english"))
 
 
-def _read(ext: str, path: str) -> str:
+def extract_text(raw_bytes: bytes, ext: str) -> str:
+    return _normalise(_read(ext, io.BytesIO(raw_bytes)))
+
+
+def _read(ext: str, fileobj: io.BytesIO) -> str:
     if ext == "txt":
-        with open(path, encoding="utf-8", errors="replace") as f:
-            return f.read()
+        return fileobj.read().decode("utf-8", errors="replace")
 
     if ext == "docx":
         from docx import Document
-        doc = Document(path)
-        return "\n".join(p.text for p in doc.paragraphs)
+        return "\n".join(p.text for p in Document(fileobj).paragraphs)
 
     if ext == "pdf":
         from pypdf import PdfReader
-        reader = PdfReader(path)
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
+        return "\n".join(page.extract_text() or "" for page in PdfReader(fileobj).pages)
 
     raise ValueError(f"Unsupported file type: {ext}")
 
 
 def _normalise(text: str) -> str:
-    # unicode → ASCII-compatible, lowercase
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     text = text.lower()
-    # collapse whitespace, strip non-alphanumeric except spaces
     text = re.sub(r"[^a-z0-9\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
+    if settings.filter_stopwords:
+        text = " ".join(w for w in text.split() if w not in _STOPWORDS)
     return text
