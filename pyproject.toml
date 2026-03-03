@@ -11,6 +11,7 @@ dependencies = [
     "nltk>=3.9.3",
     "passlib[argon2]>=1.7.4",
     "pypdf>=6.7.4",
+    "pytest>=9.0.2",
     "python-docx>=1.2.0",
     "python-jose[cryptography]>=3.5.0",
     "redis>=6.4.0",
@@ -41,5 +42,39 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = ["*/tests/*", "*/__pycache__/*", "*/htmlcov/*", "*/.venv/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]
 
 
