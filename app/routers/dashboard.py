@@ -40,6 +40,8 @@ def dashboard_home(
 
 # --- Exam creation ---
 
+# Note: course creation is admin-only (/admin/courses/new)
+
 
 @router.get("/exams/new", response_class=HTMLResponse)
 def new_exam_form(
@@ -250,7 +252,7 @@ async def update_review(
 def _highlight(text: str, spans: list[tuple[int, int]]) -> list[dict]:
     tokens = text.split()
     matched = set()
-    for s, e in spans:
+    for s, e in spans:  
         matched.update(range(s, e))
     segments, i = [], 0
     while i < len(tokens):

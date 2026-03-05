@@ -3,15 +3,21 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import AuditAction, Exam, Role, SimilarityPair, Submission, User
+from ..models import AuditAction, Course, Enrollment, Exam, Role, SimilarityPair, Submission, User
 from ..services.audit import log as audit
 
 router = APIRouter(prefix="/student", tags=["student"])
 templates = Jinja2Templates(directory="templates")
+
+
+def _require_student(user: User):
+    if user.role != Role.student:
+        raise HTTPException(status_code=403, detail="Students only")
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -20,14 +26,12 @@ def student_dashboard(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ):
-    if user.role != Role.student:
-        raise HTTPException(status_code=403, detail="Students only")
+    _require_student(user)
 
     from datetime import UTC, datetime
 
-    from ..models import Enrollment
-
     now = datetime.now(UTC).replace(tzinfo=None)
+
     enrolled_course_ids = [
         e.course_id for e in db.query(Enrollment).filter_by(student_id=user.id).all()
     ]
@@ -48,6 +52,7 @@ def student_dashboard(
         .order_by(Submission.uploaded_at.desc())
         .all()
     )
+    all_courses = db.query(Course).all()
 
     return templates.TemplateResponse(
         "student/dashboard.html",
@@ -56,8 +61,64 @@ def student_dashboard(
             "user": user,
             "open_exams": open_exams,
             "submissions": submissions,
+            "all_courses": all_courses,
+            "enrolled_ids": set(enrolled_course_ids),
         },
     )
+
+
+@router.get("/courses", response_class=HTMLResponse)
+def browse_courses(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    _require_student(user)
+    enrolled_ids = {e.course_id for e in db.query(Enrollment).filter_by(student_id=user.id).all()}
+    courses = db.query(Course).order_by(Course.code).all()
+    return templates.TemplateResponse(
+        "student/courses.html",
+        {"request": request, "user": user, "courses": courses, "enrolled_ids": enrolled_ids},
+    )
+
+
+@router.post("/courses/{course_id}/enroll", response_class=HTMLResponse)
+def enroll(
+    course_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    _require_student(user)
+    if not db.get(Course, course_id):
+        raise HTTPException(status_code=404, detail="Course not found")
+    enrollment = Enrollment(student_id=user.id, course_id=course_id)
+    db.add(enrollment)
+    try:
+        db.commit()
+        audit(
+            db,
+            AuditAction.enrollment_created,
+            user_id=user.id,
+            target_id=course_id,
+            target_type="course",
+        )
+    except IntegrityError:
+        db.rollback()
+    return RedirectResponse(url="/student/courses", status_code=303)
+
+
+@router.post("/courses/{course_id}/unenroll", response_class=HTMLResponse)
+def unenroll(
+    course_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    _require_student(user)
+    e = db.query(Enrollment).filter_by(student_id=user.id, course_id=course_id).first()
+    if e:
+        db.delete(e)
+        db.commit()
+    return RedirectResponse(url="/student/courses", status_code=303)
 
 
 @router.get("/exams/{exam_id}/submit", response_class=HTMLResponse)
@@ -67,9 +128,7 @@ def submit_form(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ):
-    if user.role != Role.student:
-        raise HTTPException(status_code=403, detail="Students only")
-
+    _require_student(user)
     exam = db.get(Exam, exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
@@ -93,8 +152,7 @@ async def submit_file(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ):
-    if user.role != Role.student:
-        raise HTTPException(status_code=403, detail="Students only")
+    _require_student(user)
 
     from ..routers.submissions import upload_submission
 
@@ -136,9 +194,7 @@ def submission_detail(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ):
-    if user.role != Role.student:
-        raise HTTPException(status_code=403, detail="Students only")
-
+    _require_student(user)
     sub = db.get(Submission, submission_id)
     if not sub or sub.student_id != user.id:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -163,11 +219,5 @@ def submission_detail(
 
     return templates.TemplateResponse(
         "student/submission.html",
-        {
-            "request": request,
-            "user": user,
-            "sub": sub,
-            "exam": sub.exam,
-            "pairs": pairs,
-        },
+        {"request": request, "user": user, "sub": sub, "exam": sub.exam, "pairs": pairs},
     )

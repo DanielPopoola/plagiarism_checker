@@ -1,3 +1,4 @@
+{# templates/dashboard/home.html — Lecturer portal: course list with exam management #}
 {% extends "base.html" %}
 {% block title %}Dashboard · PlagCheck{% endblock %}
 {% block content %}
@@ -7,18 +8,11 @@
       <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Lecturer Portal</p>
       <h1 class="text-2xl font-extrabold tracking-tight">My Courses</h1>
     </div>
-    <div class="flex items-center gap-3">
-      <a href="/dashboard/exams/new"
-         class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-        <span class="material-symbols-outlined text-primary" style="font-size:16px">edit_document</span>
-        New Exam
-      </a>
-      <a href="/dashboard/courses/new"
-         class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
-        <span class="material-symbols-outlined" style="font-size:16px">add</span>
-        New Course
-      </a>
-    </div>
+    <a href="/dashboard/exams/new"
+       class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+      <span class="material-symbols-outlined text-primary" style="font-size:16px">edit_document</span>
+      New Exam
+    </a>
   </div>
 
   {% for course in courses %}
@@ -75,12 +69,8 @@
   {% else %}
   <div class="bg-white rounded-xl border border-slate-200 p-14 text-center">
     <span class="material-symbols-outlined text-slate-300 block mb-3" style="font-size:48px">inbox</span>
-    <p class="text-slate-400 font-medium mb-4">No courses yet.</p>
-    <a href="/dashboard/courses/new"
-       class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
-      <span class="material-symbols-outlined" style="font-size:16px">add</span>
-      Create your first course
-    </a>
+    <p class="text-slate-400 font-medium">No courses assigned yet.</p>
+    <p class="text-slate-400 text-sm mt-1">Contact an admin to have courses assigned to you.</p>
   </div>
   {% endfor %}
 </div>
