@@ -18,7 +18,9 @@
       {% set review_status = pair.review.status if pair.review else "pending" %}
       <tr class="hover:bg-slate-50 transition-colors">
         <td class="px-6 py-3 font-semibold text-slate-700">
-          #{{ pair.submission_a_id }} <span class="text-slate-300 mx-1">vs</span> #{{ pair.submission_b_id }}
+          {{ pair.submission_a.student.name if pair.submission_a and pair.submission_a.student else ('#' ~ pair.submission_a_id) }}
+          <span class="text-slate-300 mx-1">vs</span>
+          {{ pair.submission_b.student.name if pair.submission_b and pair.submission_b.student else ('#' ~ pair.submission_b_id) }}
         </td>
         <td class="px-6 py-3">
           <div class="flex items-center gap-3">
