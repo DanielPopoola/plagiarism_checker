@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Admin · PlagCheck{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto w-full px-6 py-8">
+
+  <div class="mb-8">
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Admin Portal</p>
+    <h1 class="text-2xl font-extrabold tracking-tight">Overview</h1>
+  </div>
+
+  {# ── Stat cards ── #}
+  <div class="grid grid-cols-4 gap-4 mb-8">
+    {% for label, value, icon, color in [
+      ("Users",        total_users,       "group",      "bg-blue-50 text-blue-600 border-blue-100"),
+      ("Courses",      total_courses,     "school",     "bg-primary/5 text-primary border-primary/10"),
+      ("Departments",  total_departments, "apartment",  "bg-purple-50 text-purple-600 border-purple-100"),
+      ("Enrolments",   total_submissions, "how_to_reg", "bg-green-50 text-green-600 border-green-100"),
+    ] %}
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-4">
+      <div class="h-10 w-10 rounded-lg {{ color }} border flex items-center justify-center flex-shrink-0">
+        <span class="material-symbols-outlined" style="font-size:20px">{{ icon }}</span>
+      </div>
+      <div>
+        <p class="text-2xl font-extrabold text-slate-800">{{ value }}</p>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ label }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── Quick links ── #}
+  <div class="grid grid-cols-3 gap-4 mb-8">
+    <a href="/admin/users-list"
+       class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-3 hover:border-primary/30 hover:shadow-md transition-all group">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">manage_accounts</span>
+      <div>
+        <p class="text-sm font-bold text-slate-700">Manage Users</p>
+        <p class="text-xs text-slate-400">Roles, departments, status</p>
+      </div>
+      <span class="material-symbols-outlined text-slate-300 ml-auto group-hover:text-primary transition-colors" style="font-size:18px">chevron_right</span>
+    </a>
+    <a href="/admin/departments-list"
+       class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-3 hover:border-primary/30 hover:shadow-md transition-all group">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">apartment</span>
+      <div>
+        <p class="text-sm font-bold text-slate-700">Departments & Courses</p>
+        <p class="text-xs text-slate-400">Browse by department</p>
+      </div>
+      <span class="material-symbols-outlined text-slate-300 ml-auto group-hover:text-primary transition-colors" style="font-size:18px">chevron_right</span>
+    </a>
+    <a href="/dashboard/"
+       class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-3 hover:border-primary/30 hover:shadow-md transition-all group">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">analytics</span>
+      <div>
+        <p class="text-sm font-bold text-slate-700">Exam Reports</p>
+        <p class="text-xs text-slate-400">Similarity analysis</p>
+      </div>
+      <span class="material-symbols-outlined text-slate-300 ml-auto group-hover:text-primary transition-colors" style="font-size:18px">chevron_right</span>
+    </a>
+  </div>
+
+  {# ── Recent activity ── #}
+  <div>
+    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Recent Activity</h2>
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="divide-y divide-slate-100">
+        {% for log in logs %}
+        <div class="px-5 py-3 flex items-center justify-between">
+          <div>
+            <span class="text-xs font-bold text-slate-700">{{ log.action | replace("_", " ") | title }}</span>
+            <span class="text-xs text-slate-400 ml-2">
+              {% if log.user %}{{ log.user.name }}{% else %}Unknown{% endif %}
+              {% if log.target_type %} · {{ log.target_type }} #{{ log.target_id }}{% endif %}
+            </span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-medium flex-shrink-0 ml-4">
+            {{ log.created_at.strftime("%d %b %H:%M") }}
+          </span>
+        </div>
+        {% else %}
+        <div class="px-5 py-8 text-center text-sm text-slate-400">No activity yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
