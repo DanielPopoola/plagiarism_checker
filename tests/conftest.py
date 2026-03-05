@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db
 from app.main import app
 from app.auth import hash_password, create_token
-from app.models import Course, Exam, Role, Submission, User
+from app.models import Course, CourseDepartment, Department, Exam, Role, Submission, User
 
 _engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
 _Session = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
@@ -44,8 +44,8 @@ def _now():
     return datetime.now(UTC)
 
 
-def make_user(db, email, name, role, active=True) -> User:
-    u = User(email=email, name=name, role=role,
+def make_user(db, email, name, role, active=True, department_id=None) -> User:
+    u = User(email=email, name=name, role=role, department_id=department_id,
              hashed_pw=hash_password("password123"), is_active=active)
     db.add(u)
     db.commit()
@@ -58,8 +58,8 @@ _user = make_user
 
 
 @pytest.fixture
-def student(db):
-    return make_user(db, "student@test.com", "Alice", Role.student)
+def student(db, department):
+    return make_user(db, "student@test.com", "Alice", Role.student, department_id=department.id)
 
 @pytest.fixture
 def lecturer(db):
@@ -83,9 +83,20 @@ def auth(user: User) -> dict:
 
 
 @pytest.fixture
-def course(db, admin) -> Course:
+def department(db) -> Department:
+    d = Department(name="Computer Science", code="CSC")
+    db.add(d)
+    db.commit()
+    db.refresh(d)
+    return d
+
+
+@pytest.fixture
+def course(db, admin, department) -> Course:
     c = Course(title="Computer Science 101", code="CS101", lecturer_id=admin.id)
     db.add(c)
+    db.flush()
+    db.add(CourseDepartment(course_id=c.id, department_id=department.id))
     db.commit()
     db.refresh(c)
     return c

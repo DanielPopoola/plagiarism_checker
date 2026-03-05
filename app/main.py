@@ -49,7 +49,11 @@ def register_api(body: UserCreate, db: Annotated[Session, Depends(get_db)]):
     if db.query(User).filter_by(email=body.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     user = User(
-        email=body.email, name=body.name, role=body.role, hashed_pw=hash_password(body.password)
+        email=body.email,
+        name=body.name,
+        role=body.role,
+        department_id=body.department_id,
+        hashed_pw=hash_password(body.password),
     )
     db.add(user)
     db.commit()

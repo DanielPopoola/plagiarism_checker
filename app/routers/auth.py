@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import create_token, hash_password, verify_password
 from ..database import get_db
-from ..models import AuditAction, Role, User
+from ..models import AuditAction, Department, Role, User
 from ..services.audit import log as audit
 
 router = APIRouter(tags=["auth"])
@@ -53,8 +53,12 @@ async def login_submit(
 
 
 @router.get("/register", response_class=HTMLResponse)
-def register_page(request: Request):
-    return templates.TemplateResponse("auth/register.html", {"request": request, "error": None})
+def register_page(request: Request, db: Annotated[Session, Depends(get_db)]):
+    departments = db.query(Department).order_by(Department.name).all()
+    return templates.TemplateResponse(
+        "auth/register.html",
+        {"request": request, "error": None, "departments": departments},
+    )
 
 
 @router.post("/register")
@@ -65,15 +69,30 @@ async def register_submit(
     email: str = Form(...),
     password: str = Form(...),
     role: str = Form(...),
+    department_id: int | None = Form(None),
 ):
     if db.query(User).filter_by(email=email).first():
         return templates.TemplateResponse(
             "auth/register.html",
-            {"request": request, "error": "Email already registered"},
+            {"request": request, "error": "Email already registered", "departments": db.query(Department).order_by(Department.name).all()},
             status_code=400,
         )
     user_role = Role(role) if role in Role._value2member_map_ else Role.student
-    user = User(email=email, name=name, role=user_role, hashed_pw=hash_password(password))
+    chosen_department = db.get(Department, department_id) if department_id else None
+    if user_role == Role.student and not chosen_department:
+        departments = db.query(Department).order_by(Department.name).all()
+        return templates.TemplateResponse(
+            "auth/register.html",
+            {"request": request, "error": "Students must select a department", "departments": departments},
+            status_code=400,
+        )
+    user = User(
+        email=email,
+        name=name,
+        role=user_role,
+        department_id=chosen_department.id if chosen_department else None,
+        hashed_pw=hash_password(password),
+    )
     db.add(user)
     db.commit()
     audit(db, AuditAction.user_created, user_id=user.id, target_id=user.id, target_type="user")

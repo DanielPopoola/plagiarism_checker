@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user, lecturer_or_admin
 from ..database import get_db
-from ..models import AuditAction, Course, Exam, Role, User
+from ..models import AuditAction, Course, CourseDepartment, Exam, Role, User
 from ..schemas import ExamCreate, ExamOut
 from ..services.audit import log as audit
 
@@ -40,13 +40,19 @@ def create_exam(
 def list_exams(
     db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]
 ):
-    if user.role in (Role.lecturer, Role.admin):
+    if user.role == Role.admin:
+        return db.query(Exam).all()
+    if user.role == Role.lecturer:
         course_ids = [c.id for c in db.query(Course).filter_by(lecturer_id=user.id).all()]
         return db.query(Exam).filter(Exam.course_id.in_(course_ids)).all()
     from datetime import UTC, datetime
 
     now = datetime.now(UTC).replace(tzinfo=None)
-    return db.query(Exam).filter(Exam.opens_at <= now, Exam.closes_at >= now).all()
+    department_course_ids = [
+        link.course_id
+        for link in db.query(CourseDepartment).filter_by(department_id=user.department_id).all()
+    ]
+    return db.query(Exam).filter(Exam.course_id.in_(department_course_ids), Exam.opens_at <= now, Exam.closes_at >= now).all()
 
 
 @router.get("/{exam_id}", response_model=ExamOut)

@@ -54,6 +54,18 @@
           </select>
         </div>
 
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Department</label>
+          <select name="department_id"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 bg-white">
+            <option value="">Select department</option>
+            {% for dept in departments %}
+            <option value="{{ dept.id }}">{{ dept.name }} ({{ dept.code }})</option>
+            {% endfor %}
+          </select>
+          <p class="text-xs text-slate-400 mt-1">Required for students.</p>
+        </div>
+
         <button type="submit"
           class="w-full bg-slate-900 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-slate-700 transition">
           Create account

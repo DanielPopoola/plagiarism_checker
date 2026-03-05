@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import AuditAction, Course, Enrollment, Exam, Role, SimilarityPair, Submission, User
+from ..models import AuditAction, Course, CourseDepartment, Enrollment, Exam, Role, SimilarityPair, Submission, User
 from ..services.audit import log as audit
 
 router = APIRouter(prefix="/student", tags=["student"])
@@ -32,18 +32,22 @@ def student_dashboard(
 
     now = datetime.now(UTC).replace(tzinfo=None)
 
+    department_course_ids = [
+        link.course_id
+        for link in db.query(CourseDepartment).filter_by(department_id=user.department_id).all()
+    ]
     enrolled_course_ids = [
         e.course_id for e in db.query(Enrollment).filter_by(student_id=user.id).all()
     ]
     open_exams = (
         db.query(Exam)
         .filter(
-            Exam.course_id.in_(enrolled_course_ids),
+            Exam.course_id.in_(department_course_ids),
             Exam.opens_at <= now,
             Exam.closes_at >= now,
         )
         .all()
-        if enrolled_course_ids
+        if department_course_ids
         else []
     )
     submissions = (
@@ -52,7 +56,7 @@ def student_dashboard(
         .order_by(Submission.uploaded_at.desc())
         .all()
     )
-    all_courses = db.query(Course).all()
+    all_courses = db.query(Course).filter(Course.id.in_(department_course_ids)).all() if department_course_ids else []
 
     return templates.TemplateResponse(
         "student/dashboard.html",
@@ -75,7 +79,8 @@ def browse_courses(
 ):
     _require_student(user)
     enrolled_ids = {e.course_id for e in db.query(Enrollment).filter_by(student_id=user.id).all()}
-    courses = db.query(Course).order_by(Course.code).all()
+    department_course_ids = [link.course_id for link in db.query(CourseDepartment).filter_by(department_id=user.department_id).all()]
+    courses = db.query(Course).filter(Course.id.in_(department_course_ids)).order_by(Course.code).all() if department_course_ids else []
     return templates.TemplateResponse(
         "student/courses.html",
         {"request": request, "user": user, "courses": courses, "enrolled_ids": enrolled_ids},
@@ -89,8 +94,12 @@ def enroll(
     user: Annotated[User, Depends(get_current_user)],
 ):
     _require_student(user)
-    if not db.get(Course, course_id):
+    course = db.get(Course, course_id)
+    if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+    allowed = db.query(CourseDepartment).filter_by(course_id=course_id, department_id=user.department_id).first()
+    if not allowed:
+        raise HTTPException(status_code=403, detail="You can only enroll in courses for your department")
     enrollment = Enrollment(student_id=user.id, course_id=course_id)
     db.add(enrollment)
     try:
@@ -138,6 +147,9 @@ def submit_form(
     now = datetime.now(UTC).replace(tzinfo=None)
     if not (exam.opens_at <= now <= exam.closes_at):
         raise HTTPException(status_code=400, detail="Submission window is not open")
+    allowed = db.query(CourseDepartment).filter_by(course_id=exam.course_id, department_id=user.department_id).first()
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Exam is not available to your department")
 
     return templates.TemplateResponse(
         "student/submit.html",
