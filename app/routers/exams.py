@@ -52,7 +52,13 @@ def list_exams(
         link.course_id
         for link in db.query(CourseDepartment).filter_by(department_id=user.department_id).all()
     ]
-    return db.query(Exam).filter(Exam.course_id.in_(department_course_ids), Exam.opens_at <= now, Exam.closes_at >= now).all()
+    return (
+        db.query(Exam)
+        .filter(
+            Exam.course_id.in_(department_course_ids), Exam.opens_at <= now, Exam.closes_at >= now
+        )
+        .all()
+    )
 
 
 @router.get("/{exam_id}", response_model=ExamOut)

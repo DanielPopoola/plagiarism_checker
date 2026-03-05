@@ -123,7 +123,6 @@ class Course(Base):
         "CourseDepartment", back_populates="course", cascade="all, delete-orphan"
     )
 
-
     @property
     def department_ids(self):
         return [link.department_id for link in self.department_links]

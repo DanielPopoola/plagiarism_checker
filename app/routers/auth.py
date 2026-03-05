@@ -74,7 +74,11 @@ async def register_submit(
     if db.query(User).filter_by(email=email).first():
         return templates.TemplateResponse(
             "auth/register.html",
-            {"request": request, "error": "Email already registered", "departments": db.query(Department).order_by(Department.name).all()},
+            {
+                "request": request,
+                "error": "Email already registered",
+                "departments": db.query(Department).order_by(Department.name).all(),
+            },
             status_code=400,
         )
     user_role = Role(role) if role in Role._value2member_map_ else Role.student
@@ -83,7 +87,11 @@ async def register_submit(
         departments = db.query(Department).order_by(Department.name).all()
         return templates.TemplateResponse(
             "auth/register.html",
-            {"request": request, "error": "Students must select a department", "departments": departments},
+            {
+                "request": request,
+                "error": "Students must select a department",
+                "departments": departments,
+            },
             status_code=400,
         )
     user = User(

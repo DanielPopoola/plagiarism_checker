@@ -33,13 +33,15 @@ def dashboard_home(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(lecturer_or_admin)],
 ):
-    courses = db.query(Course).all() if user.role == Role.admin else db.query(Course).filter_by(lecturer_id=user.id).all()
+    courses = (
+        db.query(Course).all()
+        if user.role == Role.admin
+        else db.query(Course).filter_by(lecturer_id=user.id).all()
+    )
     return templates.TemplateResponse(
         "dashboard/home.html",
         {"request": request, "user": user, "courses": courses},
     )
-
-
 
 
 @router.get("/courses/new", response_class=HTMLResponse)
@@ -107,7 +109,11 @@ def new_exam_form(
     user: Annotated[User, Depends(lecturer_or_admin)],
     course_id: int | None = None,
 ):
-    courses = db.query(Course).all() if user.role == Role.admin else db.query(Course).filter_by(lecturer_id=user.id).all()
+    courses = (
+        db.query(Course).all()
+        if user.role == Role.admin
+        else db.query(Course).filter_by(lecturer_id=user.id).all()
+    )
     return templates.TemplateResponse(
         "dashboard/exam_new.html",
         {
@@ -142,7 +148,11 @@ async def create_exam(
         opens = datetime.fromisoformat(opens_at)
         closes = datetime.fromisoformat(closes_at)
     except ValueError:
-        courses = db.query(Course).all() if user.role == Role.admin else db.query(Course).filter_by(lecturer_id=user.id).all()
+        courses = (
+            db.query(Course).all()
+            if user.role == Role.admin
+            else db.query(Course).filter_by(lecturer_id=user.id).all()
+        )
         return templates.TemplateResponse(
             "dashboard/exam_new.html",
             {"request": request, "user": user, "courses": courses, "error": "Invalid date format."},
@@ -150,7 +160,11 @@ async def create_exam(
         )
 
     if closes <= opens:
-        courses = db.query(Course).all() if user.role == Role.admin else db.query(Course).filter_by(lecturer_id=user.id).all()
+        courses = (
+            db.query(Course).all()
+            if user.role == Role.admin
+            else db.query(Course).filter_by(lecturer_id=user.id).all()
+        )
         return templates.TemplateResponse(
             "dashboard/exam_new.html",
             {

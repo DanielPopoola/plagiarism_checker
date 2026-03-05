@@ -8,7 +8,16 @@ from sqlalchemy.orm import Session
 
 from ..auth import admin_only
 from ..database import get_db
-from ..models import AuditAction, AuditLog, Course, CourseDepartment, Department, Enrollment, Role, User
+from ..models import (
+    AuditAction,
+    AuditLog,
+    Course,
+    CourseDepartment,
+    Department,
+    Enrollment,
+    Role,
+    User,
+)
 from ..schemas import DepartmentOut, UserOut
 from ..services.audit import log as audit
 
@@ -87,8 +96,6 @@ def get_audit_logs(
     limit: int = 100,
 ):
     return db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
-
-
 
 
 @router.get("/departments", response_model=list[DepartmentOut])
@@ -299,7 +306,6 @@ async def unenroll_student_form(
         db.delete(e)
         db.commit()
     return RedirectResponse(url="/admin/", status_code=303)
-
 
 
 @router.post("/departments/new", response_class=HTMLResponse)

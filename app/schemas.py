@@ -31,7 +31,6 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-
 class DepartmentCreate(BaseModel):
     name: str
     code: str
