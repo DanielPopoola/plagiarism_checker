@@ -39,7 +39,12 @@ async def login_submit(
 
     audit(db, AuditAction.login, user_id=user.id, detail={"success": True}, ip_address=ip)
     token = create_token(user.id, user.role)
-    redirect = "/student/dashboard" if user.role == Role.student else "/dashboard/"
+    if user.role == Role.student:
+        redirect = "/student/dashboard"
+    elif user.role == Role.admin:
+        redirect = "/admin/"
+    else:
+        redirect = "/dashboard/"
     response = RedirectResponse(url=redirect, status_code=302)
     response.set_cookie(
         key="session", value=token, httponly=True, samesite="lax", max_age=_max_age()

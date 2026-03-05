@@ -248,6 +248,11 @@ def pair_detail(
 
     sub_a = db.get(Submission, pair.submission_a_id)
     sub_b = db.get(Submission, pair.submission_b_id)
+    if not sub_a or not sub_b:
+        raise HTTPException(status_code=404)
+
+    if user.role == Role.lecturer and sub_a.exam.course.lecturer_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your pair")
 
     highlights_a = _highlight(
         sub_a.extracted_text or "", [(f.start_a, f.end_a) for f in pair.fragments]
@@ -260,6 +265,7 @@ def pair_detail(
         "dashboard/pair.html",
         {
             "request": request,
+            "user": user,
             "pair": pair,
             "sub_a": sub_a,
             "sub_b": sub_b,
