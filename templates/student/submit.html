@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Submit · {{ exam.title }} · PlagCheck{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto w-full px-6 py-8">
+
+  <a href="/student/dashboard" class="flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-5">
+    <span class="material-symbols-outlined" style="font-size:16px">arrow_back</span>
+    Back to dashboard
+  </a>
+
+  <div class="mb-6">
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Submit Work</p>
+    <h1 class="text-2xl font-extrabold tracking-tight">{{ exam.title }}</h1>
+    {% if exam.course %}
+    <p class="text-sm text-slate-400 mt-0.5">{{ exam.course.code }} · {{ exam.course.title }}</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-4">
+    <dl class="grid grid-cols-2 gap-4 text-sm mb-6">
+      <div>
+        <dt class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Opens</dt>
+        <dd class="font-semibold text-slate-700">{{ exam.opens_at.strftime("%d %b %Y %H:%M") }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Closes</dt>
+        <dd class="font-semibold text-slate-700">{{ exam.closes_at.strftime("%d %b %Y %H:%M") }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Allowed formats</dt>
+        <dd class="font-semibold text-slate-700 uppercase">{{ exam.allowed_formats | replace(",", ", ") }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Max size</dt>
+        <dd class="font-semibold text-slate-700">{{ exam.max_file_mb }} MB</dd>
+      </div>
+    </dl>
+
+    {% if exam.description %}
+    <div class="bg-slate-50 rounded-lg px-4 py-3 mb-6 text-sm text-slate-600 border border-slate-100">
+      {{ exam.description }}
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/student/exams/{{ exam.id }}/submit" enctype="multipart/form-data" class="space-y-5">
+      <div>
+        <label class="block text-sm font-bold text-slate-700 mb-2">Your submission file</label>
+        <input type="file" name="file" required
+               accept=".{{ exam.allowed_formats | replace(',', ',.') }}"
+               class="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-colors cursor-pointer">
+        <p class="text-xs text-slate-400 mt-1.5">Accepted: {{ exam.allowed_formats | upper | replace(",", ", ") }} · Max {{ exam.max_file_mb }} MB</p>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex gap-3 text-sm text-amber-800">
+        <span class="material-symbols-outlined text-amber-500 mt-0.5 flex-shrink-0" style="font-size:16px">warning</span>
+        <span>Submitting replaces any previous upload for this exam. Plagiarism analysis runs automatically after submission.</span>
+      </div>
+
+      <button type="submit"
+              class="w-full py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20">
+        <span class="material-symbols-outlined" style="font-size:18px">upload_file</span>
+        Upload submission
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

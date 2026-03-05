@@ -1,56 +1,106 @@
 {% extends "base.html" %}
-{% block title %}{{ exam.title }} · PlagCheck{% endblock %}
+{% block title %}New Exam · PlagCheck{% endblock %}
 {% block content %}
-<div class="max-w-6xl mx-auto w-full px-6 py-8">
+<div class="max-w-2xl mx-auto w-full px-6 py-8">
 
-  <nav class="flex items-center gap-2 text-xs text-slate-400 font-semibold uppercase tracking-wider mb-4">
+  <nav class="flex items-center gap-2 text-xs text-slate-400 font-semibold uppercase tracking-wider mb-5">
     <a href="/dashboard/" class="hover:text-primary transition-colors">Dashboard</a>
     <span class="material-symbols-outlined" style="font-size:14px">chevron_right</span>
-    <span class="text-slate-700">{{ exam.title }}</span>
+    <span class="text-slate-700">New Exam</span>
   </nav>
 
-  <div class="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
-    <div>
-      <h1 class="text-2xl font-extrabold tracking-tight">{{ exam.title }}</h1>
-      <p class="text-sm text-slate-400 mt-0.5">{{ exam.course.code if exam.course else "" }}</p>
-    </div>
-    <div class="flex items-center gap-3">
-      {% if job %}
-        {% set colors = {"pending": "bg-yellow-100 text-yellow-700", "running": "bg-blue-100 text-blue-700", "completed": "bg-green-100 text-green-700", "failed": "bg-red-100 text-red-600"} %}
-        <span class="px-3 py-1 rounded-full text-xs font-bold {{ colors[job.status] }}">{{ job.status }}</span>
-        {% if job.status == "running" %}
-        <span class="text-xs text-slate-400"
-              hx-get="/dashboard/exams/{{ exam.id }}"
-              hx-trigger="every 5s"
-              hx-target="body"
-              hx-swap="outerHTML">⟳ refreshing…</span>
+  <div class="mb-6">
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Lecturer Portal</p>
+    <h1 class="text-2xl font-extrabold tracking-tight">Create Exam</h1>
+  </div>
+
+  {% if error %}
+  <div class="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <form method="post" action="/dashboard/exams/new" class="space-y-5">
+
+      <div>
+        <label class="block text-sm font-bold text-slate-700 mb-1">Course</label>
+        <select name="course_id" required
+                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+          <option value="" disabled {% if not preselect_course %}selected{% endif %}>Select a course…</option>
+          {% for course in courses %}
+          <option value="{{ course.id }}" {% if preselect_course and course.id == preselect_course %}selected{% endif %}>{{ course.code }} — {{ course.title }}</option>
+          {% endfor %}
+        </select>
+        {% if not courses %}
+        <p class="text-xs text-amber-600 mt-1">No courses yet. <a href="/dashboard/courses/new" class="underline font-semibold">Create one first.</a></p>
         {% endif %}
-      {% else %}
-        <span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-400">awaiting submissions</span>
-      {% endif %}
-    </div>
-  </div>
+      </div>
 
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-6 py-4 flex items-center gap-6 mb-6">
-    <span class="material-symbols-outlined text-slate-400" style="font-size:20px">filter_list</span>
-    <label class="flex items-center gap-4 text-sm font-semibold text-slate-700">
-      Min Similarity
-      <input type="range" min="0" max="1" step="0.05" value="{{ min_score }}"
-             name="min_score"
-             hx-get="/dashboard/exams/{{ exam.id }}"
-             hx-trigger="change"
-             hx-target="#pairs-table"
-             hx-swap="outerHTML"
-             hx-include="this"
-             oninput="this.nextElementSibling.textContent = Math.round(this.value * 100) + '%'"
-             class="w-48 accent-primary">
-      <span class="w-12 text-primary font-bold">{{ "%.0f"|format(min_score * 100) }}%</span>
-    </label>
-    <span class="text-xs text-slate-400">Only pairs above this threshold are shown</span>
-  </div>
+      <div>
+        <label class="block text-sm font-bold text-slate-700 mb-1">Exam title</label>
+        <input type="text" name="title" required
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+               placeholder="e.g. Midterm Essay — Module 3">
+      </div>
 
-  <div id="pairs-table">
-    {% include "dashboard/fragments/pairs_table.html" %}
+      <div>
+        <label class="block text-sm font-bold text-slate-700 mb-1">Instructions / description <span class="font-normal text-slate-400">(optional)</span></label>
+        <textarea name="description" rows="3"
+                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+                  placeholder="Instructions students will see before submitting…"></textarea>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1">Opens at</label>
+          <input type="datetime-local" name="opens_at" required
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1">Closes at</label>
+          <input type="datetime-local" name="closes_at" required
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1">Allowed formats</label>
+          <input type="text" name="allowed_formats" value="pdf,docx,txt"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                 placeholder="pdf,docx,txt">
+          <p class="text-xs text-slate-400 mt-1">Comma-separated, no spaces</p>
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1">Max file size (MB)</label>
+          <input type="number" name="max_file_mb" value="10" min="1" max="100"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold text-slate-700 mb-1">
+          Similarity threshold — <span id="threshold-label" class="text-primary">40%</span>
+        </label>
+        <input type="range" name="similarity_threshold" min="0" max="1" step="0.05" value="0.4"
+               oninput="document.getElementById('threshold-label').textContent = Math.round(this.value*100)+'%'"
+               class="w-full accent-primary">
+        <p class="text-xs text-slate-400 mt-1">Pairs above this score are flagged in reports</p>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="flex-1 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20">
+          <span class="material-symbols-outlined" style="font-size:18px">add_circle</span>
+          Create exam
+        </button>
+        <a href="/dashboard/"
+           class="px-5 py-2.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+          Cancel
+        </a>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}

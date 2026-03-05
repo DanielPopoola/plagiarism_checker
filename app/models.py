@@ -1,7 +1,18 @@
 import enum
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -53,6 +64,7 @@ class AuditAction(enum.StrEnum):
     user_deactivated = "user_deactivated"
     exam_created = "exam_created"
     course_created = "course_created"
+    enrollment_created = "enrollment_created"
 
 
 # --- Models ---
@@ -71,6 +83,7 @@ class User(Base):
     courses = relationship("Course", back_populates="lecturer")
     submissions = relationship("Submission", back_populates="student")
     audit_logs = relationship("AuditLog", back_populates="user")
+    enrollments = relationship("Enrollment", back_populates="student")
 
 
 class Course(Base):
@@ -78,12 +91,28 @@ class Course(Base):
     id = Column(Integer, primary_key=True)
     lecturer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
-    code = Column(String, nullable=False)  # e.g. "CS301"
+    code = Column(String, nullable=False)
     description = Column(Text)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     lecturer = relationship("User", back_populates="courses")
     exams = relationship("Exam", back_populates="course")
+    enrollments = relationship("Enrollment", back_populates="course")
+
+
+class Enrollment(Base):
+    """Student ↔ Course membership. Admins manage this."""
+
+    __tablename__ = "enrollments"
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
+    enrolled_at = Column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (UniqueConstraint("student_id", "course_id", name="uq_enrollment"),)
+
+    student = relationship("User", back_populates="enrollments")
+    course = relationship("Course", back_populates="enrollments")
 
 
 class Exam(Base):
@@ -96,7 +125,6 @@ class Exam(Base):
     closes_at = Column(DateTime(timezone=True), nullable=False)
     allowed_formats = Column(String, default="pdf,docx,txt")
     max_file_mb = Column(Integer, default=10)
-    # Lecturer sets this: pairs above threshold are flagged. Default 40%.
     similarity_threshold = Column(Float, default=0.4)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
@@ -116,7 +144,7 @@ class Submission(Base):
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     file_path = Column(String, nullable=False)
     extracted_text = Column(EncryptedText)
-    originality_score = Column(Float)  # 0.0–1.0, populated after analysis. 1.0 = fully original
+    originality_score = Column(Float)
     uploaded_at = Column(DateTime(timezone=True), default=utcnow)
 
     exam = relationship("Exam", back_populates="submissions")
@@ -151,9 +179,9 @@ class SimilarityPair(Base):
     id = Column(Integer, primary_key=True)
     submission_a_id = Column(Integer, ForeignKey("submissions.id"), nullable=False)
     submission_b_id = Column(Integer, ForeignKey("submissions.id"), nullable=False)
-    similarity_score = Column(Float, nullable=False)  # cosine TF-IDF
-    jaccard_score = Column(Float)  # Jaccard on shingle sets
-    originality_score = Column(Float)  # 1 - max(similarity, jaccard)
+    similarity_score = Column(Float, nullable=False)
+    jaccard_score = Column(Float)
+    originality_score = Column(Float)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     submission_a = relationship(
@@ -216,11 +244,11 @@ class AuditLog(Base):
 
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # nullable for failed logins
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     action = Column(Enum(AuditAction), nullable=False)
-    target_id = Column(Integer)  # e.g. submission_id, exam_id, pair_id
-    target_type = Column(String)  # e.g. "submission", "exam", "pair"
-    detail = Column(Text)  # free-form JSON string for extra context
+    target_id = Column(Integer)
+    target_type = Column(String)
+    detail = Column(Text)
     ip_address = Column(String)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 

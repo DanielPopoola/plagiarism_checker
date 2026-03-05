@@ -36,6 +36,7 @@ class CourseCreate(BaseModel):
     title: str
     code: str
     description: str | None = None
+    lecturer_id: int  # admin assigns lecturer on creation
 
 
 class CourseOut(BaseModel):
@@ -45,6 +46,17 @@ class CourseOut(BaseModel):
     description: str | None
     lecturer_id: int
     created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+# --- Enrollment ---
+
+
+class EnrollmentOut(BaseModel):
+    id: int
+    student_id: int
+    course_id: int
+    enrolled_at: datetime
     model_config = {"from_attributes": True}
 
 

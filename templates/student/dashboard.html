@@ -1,81 +1,83 @@
 {% extends "base.html" %}
-{% block title %}My Dashboard · PlagCheck{% endblock %}
+{% block title %}Dashboard · PlagCheck{% endblock %}
 {% block content %}
-<div class="max-w-4xl mx-auto w-full px-6 py-8">
+<div class="max-w-5xl mx-auto w-full px-6 py-8">
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Lecturer Portal</p>
+      <h1 class="text-2xl font-extrabold tracking-tight">My Courses</h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="/dashboard/exams/new"
+         class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+        <span class="material-symbols-outlined text-primary" style="font-size:16px">edit_document</span>
+        New Exam
+      </a>
 
-  <div class="mb-8">
-    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Student Portal</p>
-    <h1 class="text-2xl font-extrabold tracking-tight">My Dashboard</h1>
+    </div>
   </div>
 
-  <div class="mb-8">
-    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Open for Submission</h2>
-    {% if open_exams %}
-    <div class="flex flex-col gap-3">
-      {% for exam in open_exams %}
-      <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center justify-between">
-        <div>
-          <p class="font-bold text-slate-800">{{ exam.title }}</p>
-          <p class="text-sm text-slate-400 mt-0.5">Closes {{ exam.closes_at.strftime("%d %b %Y %H:%M") }}</p>
-        </div>
-        <a href="/submissions/{{ exam.id }}"
-           class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
-          <span class="material-symbols-outlined" style="font-size:16px">upload_file</span>
-          Submit
-        </a>
+  {% for course in courses %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+      <div class="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+        <span class="material-symbols-outlined text-primary" style="font-size:18px">school</span>
       </div>
-      {% endfor %}
+      <div class="flex-1">
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ course.code }}</p>
+        <h2 class="text-base font-bold text-slate-800">{{ course.title }}</h2>
+      </div>
+      <a href="/dashboard/exams/new?course_id={{ course.id }}"
+         class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary border border-primary/20 bg-primary/5 rounded-lg hover:bg-primary/10 transition-colors">
+        <span class="material-symbols-outlined" style="font-size:14px">add</span>
+        Add exam
+      </a>
     </div>
+    {% if course.exams %}
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs uppercase text-slate-500 tracking-wider font-semibold border-b border-slate-100">
+        <tr>
+          <th class="px-6 py-3 text-left">Exam</th>
+          <th class="px-6 py-3 text-left">Opens</th>
+          <th class="px-6 py-3 text-left">Closes</th>
+          <th class="px-6 py-3 text-left">Threshold</th>
+          <th class="px-6 py-3 text-left">Analysis</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for exam in course.exams %}
+        {% set s = exam.job.status if exam.job else "no submissions" %}
+        {% set colors = {"pending": "bg-yellow-100 text-yellow-700", "running": "bg-blue-100 text-blue-700", "completed": "bg-green-100 text-green-700", "failed": "bg-red-100 text-red-600", "no submissions": "bg-slate-100 text-slate-400"} %}
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-6 py-3 font-semibold">
+            <a href="/dashboard/exams/{{ exam.id }}" class="text-slate-800 hover:text-primary transition-colors">{{ exam.title }}</a>
+          </td>
+          <td class="px-6 py-3 text-slate-500 text-xs">{{ exam.opens_at.strftime("%d %b %Y %H:%M") }}</td>
+          <td class="px-6 py-3 text-slate-500 text-xs">{{ exam.closes_at.strftime("%d %b %Y %H:%M") }}</td>
+          <td class="px-6 py-3 text-slate-500 text-xs font-semibold">{{ "%.0f"|format(exam.similarity_threshold * 100) }}%</td>
+          <td class="px-6 py-3">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold {{ colors[s] }}">{{ s }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
     {% else %}
-    <div class="bg-white rounded-xl border border-slate-200 p-8 text-center">
-      <span class="material-symbols-outlined text-slate-300 block mb-2" style="font-size:36px">event_available</span>
-      <p class="text-slate-400 text-sm font-medium">No exams currently open.</p>
-    </div>
+    <p class="px-6 py-5 text-sm text-slate-400 italic">No exams yet.
+      <a href="/dashboard/exams/new?course_id={{ course.id }}" class="text-primary font-semibold hover:underline">Create one →</a>
+    </p>
     {% endif %}
   </div>
-
-  <div>
-    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">My Submissions</h2>
-    {% if submissions %}
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-xs uppercase text-slate-500 tracking-wider font-semibold border-b border-slate-100">
-          <tr>
-            <th class="px-5 py-3 text-left">Exam</th>
-            <th class="px-5 py-3 text-left">Submitted</th>
-            <th class="px-5 py-3 text-left">Originality</th>
-            <th class="px-5 py-3"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for sub in submissions %}
-          <tr class="hover:bg-slate-50 transition-colors">
-            <td class="px-5 py-4 font-semibold text-slate-800">{{ sub.exam.title }}</td>
-            <td class="px-5 py-4 text-slate-500 text-xs">{{ sub.uploaded_at.strftime("%d %b %Y %H:%M") }}</td>
-            <td class="px-5 py-4">
-              {% if sub.originality_score is not none %}
-                {% set score = (sub.originality_score * 100)|int %}
-                {% set color = "text-green-600" if score >= 70 else ("text-amber-500" if score >= 40 else "text-red-600") %}
-                <span class="font-black text-lg {{ color }}">{{ score }}%</span>
-                <span class="text-slate-400 text-xs ml-1">original</span>
-              {% else %}
-                <span class="text-slate-300 text-xs">Pending analysis</span>
-              {% endif %}
-            </td>
-            <td class="px-5 py-4 text-right">
-              <a href="/student/submissions/{{ sub.id }}" class="text-xs text-primary font-semibold hover:underline">View report →</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="bg-white rounded-xl border border-slate-200 p-10 text-center">
-      <span class="material-symbols-outlined text-slate-300 block mb-2" style="font-size:36px">description</span>
-      <p class="text-slate-400 text-sm font-medium">No submissions yet.</p>
-    </div>
-    {% endif %}
+  {% else %}
+  <div class="bg-white rounded-xl border border-slate-200 p-14 text-center">
+    <span class="material-symbols-outlined text-slate-300 block mb-3" style="font-size:48px">inbox</span>
+    <p class="text-slate-400 font-medium mb-4">No courses yet.</p>
+    <a href="/dashboard/courses/new"
+       class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
+      <span class="material-symbols-outlined" style="font-size:16px">add</span>
+      Create your first course
+    </a>
   </div>
+  {% endfor %}
 </div>
 {% endblock %}

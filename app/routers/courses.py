@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ..auth import lecturer_or_admin
+from ..auth import admin_only, get_current_user, lecturer_or_admin
 from ..database import get_db
 from ..models import AuditAction, Course, Role, User
 from ..schemas import CourseCreate, CourseOut
@@ -16,9 +16,12 @@ router = APIRouter(prefix="/courses", tags=["courses"])
 def create_course(
     body: CourseCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(lecturer_or_admin)],
+    user: Annotated[User, Depends(admin_only)],  # admin only
 ):
-    course = Course(**body.model_dump(), lecturer_id=user.id)
+    # Admin must assign a lecturer; lecturer_id comes from body or defaults to a provided field.
+    # CourseCreate doesn't carry lecturer_id — admin picks the lecturer via the UI.
+    # We accept an optional lecturer_id in the body via CourseCreateAdmin (see schemas).
+    course = Course(**body.model_dump())
     db.add(course)
     db.commit()
     db.refresh(course)
@@ -57,13 +60,11 @@ def update_course(
     course_id: int,
     body: CourseCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(lecturer_or_admin)],
+    user: Annotated[User, Depends(admin_only)],  # admin only
 ):
     course = db.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    if user.role == Role.lecturer and course.lecturer_id != user.id:
-        raise HTTPException(status_code=403, detail="Not your course")
     for k, v in body.model_dump().items():
         setattr(course, k, v)
     db.commit()
@@ -75,12 +76,10 @@ def update_course(
 def delete_course(
     course_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(lecturer_or_admin)],
+    user: Annotated[User, Depends(admin_only)],  # admin only
 ):
     course = db.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    if user.role == Role.lecturer and course.lecturer_id != user.id:
-        raise HTTPException(status_code=403, detail="Not your course")
     db.delete(course)
     db.commit()

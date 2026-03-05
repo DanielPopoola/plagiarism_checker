@@ -1,7 +1,8 @@
+from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -33,12 +34,92 @@ def dashboard_home(
     courses = db.query(Course).filter_by(lecturer_id=user.id).all()
     return templates.TemplateResponse(
         "dashboard/home.html",
+        {"request": request, "user": user, "courses": courses},
+    )
+
+
+# --- Exam creation ---
+
+
+@router.get("/exams/new", response_class=HTMLResponse)
+def new_exam_form(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(lecturer_or_admin)],
+    course_id: int | None = None,
+):
+    courses = db.query(Course).filter_by(lecturer_id=user.id).all()
+    return templates.TemplateResponse(
+        "dashboard/exam_new.html",
         {
             "request": request,
             "user": user,
             "courses": courses,
+            "error": None,
+            "preselect_course": course_id,
         },
     )
+
+
+@router.post("/exams/new", response_class=HTMLResponse)
+async def create_exam(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(lecturer_or_admin)],
+    course_id: int = Form(...),
+    title: str = Form(...),
+    description: str = Form(""),
+    opens_at: str = Form(...),
+    closes_at: str = Form(...),
+    allowed_formats: str = Form("pdf,docx,txt"),
+    max_file_mb: int = Form(10),
+    similarity_threshold: float = Form(0.4),
+):
+    course = db.get(Course, course_id)
+    if not course or course.lecturer_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your course")
+
+    try:
+        opens = datetime.fromisoformat(opens_at)
+        closes = datetime.fromisoformat(closes_at)
+    except ValueError:
+        courses = db.query(Course).filter_by(lecturer_id=user.id).all()
+        return templates.TemplateResponse(
+            "dashboard/exam_new.html",
+            {"request": request, "user": user, "courses": courses, "error": "Invalid date format."},
+            status_code=400,
+        )
+
+    if closes <= opens:
+        courses = db.query(Course).filter_by(lecturer_id=user.id).all()
+        return templates.TemplateResponse(
+            "dashboard/exam_new.html",
+            {
+                "request": request,
+                "user": user,
+                "courses": courses,
+                "error": "Closing time must be after opening time.",
+            },
+            status_code=400,
+        )
+
+    exam = Exam(
+        course_id=course_id,
+        title=title,
+        description=description or None,
+        opens_at=opens,
+        closes_at=closes,
+        allowed_formats=allowed_formats,
+        max_file_mb=max_file_mb,
+        similarity_threshold=similarity_threshold,
+    )
+    db.add(exam)
+    db.commit()
+    audit(db, AuditAction.exam_created, user_id=user.id, target_id=exam.id, target_type="exam")
+    return RedirectResponse(url=f"/dashboard/exams/{exam.id}", status_code=303)
+
+
+# --- Exam detail ---
 
 
 @router.get("/exams/{exam_id}", response_class=HTMLResponse)
@@ -89,6 +170,9 @@ def exam_detail(
             "user": user,
         },
     )
+
+
+# --- Pair detail ---
 
 
 @router.get("/pairs/{pair_id}", response_class=HTMLResponse)
@@ -159,11 +243,7 @@ async def update_review(
 
     return templates.TemplateResponse(
         "dashboard/fragments/review_badge.html",
-        {
-            "request": request,
-            "review": review,
-            "pair_id": pair_id,
-        },
+        {"request": request, "review": review, "pair_id": pair_id},
     )
 
 
