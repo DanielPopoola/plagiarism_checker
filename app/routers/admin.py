@@ -187,6 +187,40 @@ async def create_course(
     return RedirectResponse(url="/admin/", status_code=303)
 
 
+@router.post("/courses/{course_id}/lecturer", response_class=HTMLResponse)
+async def assign_course_lecturer(
+    course_id: int,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(admin_only)],
+    lecturer_id: int = Form(...),
+):
+    course = db.get(Course, course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    lecturer = db.get(User, lecturer_id)
+    if not lecturer or lecturer.role != Role.lecturer:
+        raise HTTPException(status_code=400, detail="Selected user is not a lecturer")
+    course.lecturer_id = lecturer.id
+    db.commit()
+    return RedirectResponse(url="/admin/", status_code=303)
+
+
+@router.post("/courses/{course_id}/delete", response_class=HTMLResponse)
+async def delete_course_form(
+    course_id: int,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(admin_only)],
+):
+    course = db.get(Course, course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    db.delete(course)
+    db.commit()
+    return RedirectResponse(url="/admin/", status_code=303)
+
+
 @router.post("/enrollments/new", response_class=HTMLResponse)
 async def enroll_student_form(
     request: Request,
