@@ -23,9 +23,6 @@ def utcnow():
     return datetime.now(UTC)
 
 
-# --- Enums ---
-
-
 class Role(enum.StrEnum):
     student = "student"
     lecturer = "lecturer"
@@ -67,7 +64,29 @@ class AuditAction(enum.StrEnum):
     enrollment_created = "enrollment_created"
 
 
-# --- Models ---
+class Department(Base):
+    __tablename__ = "departments"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    code = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    users = relationship("User", back_populates="department")
+    course_links = relationship(
+        "CourseDepartment", back_populates="department", cascade="all, delete-orphan"
+    )
+
+
+class CourseDepartment(Base):
+    __tablename__ = "course_departments"
+    id = Column(Integer, primary_key=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
+
+    __table_args__ = (UniqueConstraint("course_id", "department_id", name="uq_course_department"),)
+
+    course = relationship("Course", back_populates="department_links")
+    department = relationship("Department", back_populates="course_links")
 
 
 class User(Base):
@@ -77,6 +96,7 @@ class User(Base):
     name = Column(String, nullable=False)
     hashed_pw = Column(String, nullable=False)
     role = Column(Enum(Role), nullable=False, default=Role.student)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
@@ -84,6 +104,7 @@ class User(Base):
     submissions = relationship("Submission", back_populates="student")
     audit_logs = relationship("AuditLog", back_populates="user")
     enrollments = relationship("Enrollment", back_populates="student")
+    department = relationship("Department", back_populates="users")
 
 
 class Course(Base):
@@ -98,11 +119,17 @@ class Course(Base):
     lecturer = relationship("User", back_populates="courses")
     exams = relationship("Exam", back_populates="course")
     enrollments = relationship("Enrollment", back_populates="course")
+    department_links = relationship(
+        "CourseDepartment", back_populates="course", cascade="all, delete-orphan"
+    )
+
+
+    @property
+    def department_ids(self):
+        return [link.department_id for link in self.department_links]
 
 
 class Enrollment(Base):
-    """Student ↔ Course membership. Admins manage this."""
-
     __tablename__ = "enrollments"
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -240,8 +267,6 @@ class ReviewDecision(Base):
 
 
 class AuditLog(Base):
-    """Append-only. Never delete rows from this table."""
-
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

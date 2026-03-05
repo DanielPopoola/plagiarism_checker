@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import admin_only, get_current_user, lecturer_or_admin
 from ..database import get_db
-from ..models import AuditAction, Course, Role, User
+from ..models import AuditAction, Course, CourseDepartment, Role, User
 from ..schemas import CourseCreate, CourseOut
 from ..services.audit import log as audit
 
@@ -21,8 +21,13 @@ def create_course(
     # Admin must assign a lecturer; lecturer_id comes from body or defaults to a provided field.
     # CourseCreate doesn't carry lecturer_id — admin picks the lecturer via the UI.
     # We accept an optional lecturer_id in the body via CourseCreateAdmin (see schemas).
-    course = Course(**body.model_dump())
+    payload = body.model_dump()
+    department_ids = payload.pop("department_ids", [])
+    course = Course(**payload)
     db.add(course)
+    db.flush()
+    for department_id in department_ids:
+        db.add(CourseDepartment(course_id=course.id, department_id=department_id))
     db.commit()
     db.refresh(course)
     audit(
@@ -65,8 +70,13 @@ def update_course(
     course = db.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    for k, v in body.model_dump().items():
+    payload = body.model_dump()
+    department_ids = payload.pop("department_ids", [])
+    for k, v in payload.items():
         setattr(course, k, v)
+    db.query(CourseDepartment).filter_by(course_id=course.id).delete()
+    for department_id in department_ids:
+        db.add(CourseDepartment(course_id=course.id, department_id=department_id))
     db.commit()
     db.refresh(course)
     return course

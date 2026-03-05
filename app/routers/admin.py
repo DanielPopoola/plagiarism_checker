@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from ..auth import admin_only
 from ..database import get_db
-from ..models import AuditAction, AuditLog, Course, Enrollment, Role, User
-from ..schemas import UserOut
+from ..models import AuditAction, AuditLog, Course, CourseDepartment, Department, Enrollment, Role, User
+from ..schemas import DepartmentOut, UserOut
 from ..services.audit import log as audit
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -89,6 +89,36 @@ def get_audit_logs(
     return db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
 
 
+
+
+@router.get("/departments", response_model=list[DepartmentOut])
+def list_departments(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(admin_only)],
+):
+    return db.query(Department).order_by(Department.name).all()
+
+
+@router.post("/departments")
+def create_department_api(
+    name: str,
+    code: str,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(admin_only)],
+):
+    dept = Department(name=name.strip(), code=code.strip().upper())
+    db.add(dept)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        dept = db.query(Department).filter_by(code=code.strip().upper()).first()
+        if not dept:
+            raise HTTPException(status_code=409, detail="Department already exists")
+    db.refresh(dept)
+    return dept
+
+
 # ── Enrollment JSON API ───────────────────────────────────────────────────────
 
 
@@ -149,6 +179,7 @@ def admin_dashboard(
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(50).all()
     lecturers = [u for u in users if u.role in (Role.lecturer, Role.admin)]
     students = [u for u in users if u.role == Role.student]
+    departments = db.query(Department).order_by(Department.name).all()
     return templates.TemplateResponse(
         "admin/dashboard.html",
         {
@@ -158,6 +189,7 @@ def admin_dashboard(
             "courses": courses,
             "lecturers": lecturers,
             "students": students,
+            "departments": departments,
             "logs": logs,
         },
     )
@@ -172,6 +204,7 @@ async def create_course(
     code: str = Form(...),
     description: str = Form(""),
     lecturer_id: int = Form(...),
+    department_ids: list[int] = Form(default=[]),
 ):
     lecturer = db.get(User, lecturer_id)
     if not lecturer or lecturer.role not in (Role.lecturer, Role.admin):
@@ -180,6 +213,10 @@ async def create_course(
         title=title, code=code, description=description or None, lecturer_id=lecturer_id
     )
     db.add(course)
+    db.flush()
+    for department_id in department_ids:
+        if db.get(Department, department_id):
+            db.add(CourseDepartment(course_id=course.id, department_id=department_id))
     db.commit()
     audit(
         db, AuditAction.course_created, user_id=user.id, target_id=course.id, target_type="course"
@@ -261,6 +298,39 @@ async def unenroll_student_form(
     if e:
         db.delete(e)
         db.commit()
+    return RedirectResponse(url="/admin/", status_code=303)
+
+
+
+@router.post("/departments/new", response_class=HTMLResponse)
+async def create_department(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(admin_only)],
+    name: str = Form(...),
+    code: str = Form(...),
+):
+    dept = Department(name=name.strip(), code=code.strip().upper())
+    db.add(dept)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+    return RedirectResponse(url="/admin/", status_code=303)
+
+
+@router.post("/users/{user_id}/department", response_class=HTMLResponse)
+async def assign_user_department(
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(admin_only)],
+    department_id: int = Form(...),
+):
+    target = db.get(User, user_id)
+    department = db.get(Department, department_id)
+    if not target or not department:
+        raise HTTPException(status_code=404)
+    target.department_id = department.id
+    db.commit()
     return RedirectResponse(url="/admin/", status_code=303)
 
 

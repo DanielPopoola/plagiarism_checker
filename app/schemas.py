@@ -17,6 +17,7 @@ class UserCreate(BaseModel):
     name: str
     password: str
     role: Role = Role.student
+    department_id: int | None = None
 
 
 class UserOut(BaseModel):
@@ -24,7 +25,22 @@ class UserOut(BaseModel):
     email: str
     name: str
     role: Role
+    department_id: int | None
     is_active: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+
+class DepartmentCreate(BaseModel):
+    name: str
+    code: str
+
+
+class DepartmentOut(BaseModel):
+    id: int
+    name: str
+    code: str
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -36,7 +52,8 @@ class CourseCreate(BaseModel):
     title: str
     code: str
     description: str | None = None
-    lecturer_id: int  # admin assigns lecturer on creation
+    lecturer_id: int
+    department_ids: list[int] = []
 
 
 class CourseOut(BaseModel):
@@ -45,6 +62,7 @@ class CourseOut(BaseModel):
     code: str
     description: str | None
     lecturer_id: int
+    department_ids: list[int] = []
     created_at: datetime
     model_config = {"from_attributes": True}
 

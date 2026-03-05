@@ -11,6 +11,7 @@ from ..database import get_db
 from ..models import (
     AuditAction,
     Course,
+    CourseDepartment,
     Exam,
     PlagiarismJob,
     ReviewDecision,
@@ -32,7 +33,7 @@ def dashboard_home(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(lecturer_or_admin)],
 ):
-    courses = db.query(Course).filter_by(lecturer_id=user.id).all()
+    courses = db.query(Course).all() if user.role == Role.admin else db.query(Course).filter_by(lecturer_id=user.id).all()
     return templates.TemplateResponse(
         "dashboard/home.html",
         {"request": request, "user": user, "courses": courses},
@@ -63,6 +64,7 @@ async def create_course_from_dashboard(
     title: str = Form(...),
     description: str = Form(""),
     lecturer_id: int = Form(...),
+    department_ids: list[int] = Form(default=[]),
 ):
     lecturer = db.get(User, lecturer_id)
     if not lecturer or lecturer.role not in (Role.lecturer, Role.admin):
@@ -85,6 +87,9 @@ async def create_course_from_dashboard(
         lecturer_id=lecturer.id,
     )
     db.add(course)
+    db.flush()
+    for department_id in department_ids:
+        db.add(CourseDepartment(course_id=course.id, department_id=department_id))
     db.commit()
     audit(
         db, AuditAction.course_created, user_id=user.id, target_id=course.id, target_type="course"
@@ -102,7 +107,7 @@ def new_exam_form(
     user: Annotated[User, Depends(lecturer_or_admin)],
     course_id: int | None = None,
 ):
-    courses = db.query(Course).filter_by(lecturer_id=user.id).all()
+    courses = db.query(Course).all() if user.role == Role.admin else db.query(Course).filter_by(lecturer_id=user.id).all()
     return templates.TemplateResponse(
         "dashboard/exam_new.html",
         {
@@ -130,14 +135,14 @@ async def create_exam(
     similarity_threshold: float = Form(0.4),
 ):
     course = db.get(Course, course_id)
-    if not course or course.lecturer_id != user.id:
+    if not course or (user.role == Role.lecturer and course.lecturer_id != user.id):
         raise HTTPException(status_code=403, detail="Not your course")
 
     try:
         opens = datetime.fromisoformat(opens_at)
         closes = datetime.fromisoformat(closes_at)
     except ValueError:
-        courses = db.query(Course).filter_by(lecturer_id=user.id).all()
+        courses = db.query(Course).all() if user.role == Role.admin else db.query(Course).filter_by(lecturer_id=user.id).all()
         return templates.TemplateResponse(
             "dashboard/exam_new.html",
             {"request": request, "user": user, "courses": courses, "error": "Invalid date format."},
@@ -145,7 +150,7 @@ async def create_exam(
         )
 
     if closes <= opens:
-        courses = db.query(Course).filter_by(lecturer_id=user.id).all()
+        courses = db.query(Course).all() if user.role == Role.admin else db.query(Course).filter_by(lecturer_id=user.id).all()
         return templates.TemplateResponse(
             "dashboard/exam_new.html",
             {
