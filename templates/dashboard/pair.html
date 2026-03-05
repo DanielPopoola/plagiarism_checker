@@ -37,6 +37,10 @@
         <span class="w-3 h-3 rounded-sm border border-teal-500" style="background:rgba(20,184,166,0.2)"></span>
         <span class="text-xs font-medium text-slate-500">Patchwork</span>
       </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-sm border border-slate-400" style="background:rgba(148,163,184,0.25)"></span>
+        <span class="text-xs font-medium text-slate-500">Unclassified</span>
+      </div>
     </div>
 
     <div class="flex-1 grid grid-cols-2 gap-5 min-h-0">
@@ -47,7 +51,9 @@
         </div>
         <div class="flex-1 overflow-y-auto p-6 comparison-scroll text-[15px] leading-relaxed">
           {% for seg in highlights_a %}
-            {% if seg.matched %}<mark class="{{ pair.type_result.predicted_type | replace('_', '-') if pair.type_result else 'verbatim' }}">{{ seg.text }}</mark>{% else %}{{ seg.text }}{% endif %}{{ " " }}
+            {% if seg.matched %}
+              {% if pair.type_result %}<mark class="{{ pair.type_result.predicted_type | replace('_', '-') }}">{{ seg.text }}</mark>{% else %}<mark class="bg-slate-200/70 border-b-2 border-slate-400 rounded px-0.5">{{ seg.text }}</mark>{% endif %}
+            {% else %}{{ seg.text }}{% endif %}{{ " " }}
           {% endfor %}
         </div>
       </section>
@@ -58,7 +64,9 @@
         </div>
         <div class="flex-1 overflow-y-auto p-6 comparison-scroll text-[15px] leading-relaxed">
           {% for seg in highlights_b %}
-            {% if seg.matched %}<mark class="{{ pair.type_result.predicted_type | replace('_', '-') if pair.type_result else 'verbatim' }}">{{ seg.text }}</mark>{% else %}{{ seg.text }}{% endif %}{{ " " }}
+            {% if seg.matched %}
+              {% if pair.type_result %}<mark class="{{ pair.type_result.predicted_type | replace('_', '-') }}">{{ seg.text }}</mark>{% else %}<mark class="bg-slate-200/70 border-b-2 border-slate-400 rounded px-0.5">{{ seg.text }}</mark>{% endif %}
+            {% else %}{{ seg.text }}{% endif %}{{ " " }}
           {% endfor %}
         </div>
       </section>
@@ -66,6 +74,12 @@
   </div>
 
   <aside class="w-80 bg-white border-l border-slate-200 flex flex-col gap-5 p-6 overflow-y-auto flex-shrink-0">
+    {% if not pair.type_result %}
+    <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+      <span class="font-semibold">Classification pending.</span> Highlighted matches are shown in a neutral style until type analysis completes.
+    </div>
+    {% endif %}
+
     <div>
       <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Match Details</h3>
       <div class="space-y-2">

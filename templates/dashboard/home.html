@@ -36,6 +36,7 @@
       <thead class="bg-slate-50 text-xs uppercase text-slate-500 tracking-wider font-semibold border-b border-slate-100">
         <tr>
           <th class="px-6 py-3 text-left">Exam</th>
+          <th class="px-6 py-3 text-left">Submissions</th>
           <th class="px-6 py-3 text-left">Opens</th>
           <th class="px-6 py-3 text-left">Closes</th>
           <th class="px-6 py-3 text-left">Threshold</th>
@@ -50,6 +51,7 @@
           <td class="px-6 py-3 font-semibold">
             <a href="/dashboard/exams/{{ exam.id }}" class="text-slate-800 hover:text-primary transition-colors">{{ exam.title }}</a>
           </td>
+          <td class="px-6 py-3 text-slate-500 text-xs font-semibold">{{ exam.submissions | length }}</td>
           <td class="px-6 py-3 text-slate-500 text-xs">{{ exam.opens_at.strftime("%d %b %Y %H:%M") }}</td>
           <td class="px-6 py-3 text-slate-500 text-xs">{{ exam.closes_at.strftime("%d %b %Y %H:%M") }}</td>
           <td class="px-6 py-3 text-slate-500 text-xs font-semibold">{{ "%.0f"|format(exam.similarity_threshold * 100) }}%</td>

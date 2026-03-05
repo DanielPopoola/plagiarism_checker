@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -173,6 +173,7 @@ def exam_detail(
             "pairs": pairs,
             "min_score": min_score,
             "user": user,
+            "now": datetime.now(UTC).replace(tzinfo=None),
         },
     )
 
