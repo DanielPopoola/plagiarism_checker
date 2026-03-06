@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import lecturer_or_admin
 from ..database import get_db
-from ..models import AuditAction, Exam, ReviewDecision, Role, SimilarityPair, User
+from ..models import AuditAction, Exam, ReviewDecision, Role, SimilarityPair, Submission, User
 from ..schemas import PairOut, ReviewCreate, ReviewOut
 from ..services.audit import log as audit
 
@@ -16,8 +16,8 @@ def _assert_exam_access(exam_id: int, user: User, db: Session) -> Exam:
     exam = db.get(Exam, exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
-    if user.role == Role.lecturer and exam.course.lecturer_id != user.id:
-        raise HTTPException(status_code=403, detail="Not your exam")
+    if user.role == Role.lecturer and exam.course.department_id != user.department_id:
+        raise HTTPException(status_code=403, detail="Not your department")
     return exam
 
 
@@ -31,16 +31,10 @@ def get_pairs(
 ):
     _assert_exam_access(exam_id, user, db)
     audit(
-        db,
-        AuditAction.report_viewed,
-        user_id=user.id,
-        target_id=exam_id,
-        target_type="exam",
+        db, AuditAction.report_viewed, user_id=user.id,
+        target_id=exam_id, target_type="exam",
         ip_address=request.client.host if request.client else None,
     )
-
-    from ..models import Submission
-
     sub_ids = [s.id for s in db.query(Submission.id).filter_by(exam_id=exam_id)]
     return (
         db.query(SimilarityPair)
@@ -66,9 +60,8 @@ def get_pair(
 
 
 @router.post("/pairs/{pair_id}/review", response_model=ReviewOut)
-def submit_review(
+def review_pair(
     pair_id: int,
-    request: Request,
     body: ReviewCreate,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(lecturer_or_admin)],
@@ -77,25 +70,17 @@ def submit_review(
     if not pair:
         raise HTTPException(status_code=404, detail="Pair not found")
 
-    review = db.query(ReviewDecision).filter_by(pair_id=pair_id).first()
-    if review:
-        review.status = body.status
-        review.notes = body.notes
-        review.reviewer_id = user.id
-    else:
-        review = ReviewDecision(pair_id=pair_id, reviewer_id=user.id, **body.model_dump())
+    sub_a = db.get(Submission, pair.submission_a_id)
+    _assert_exam_access(sub_a.exam_id, user, db)
+
+    review = pair.review or ReviewDecision(pair_id=pair_id)
+    review.reviewer_id = user.id
+    review.status = body.status
+    review.notes = body.notes
+    if not pair.review:
         db.add(review)
     db.commit()
-
-    audit(
-        db,
-        AuditAction.review_decision,
-        user_id=user.id,
-        target_id=pair_id,
-        target_type="pair",
-        detail={"status": body.status},
-        ip_address=request.client.host if request.client else None,
-    )
-
     db.refresh(review)
+
+    audit(db, AuditAction.review_decision, user_id=user.id, target_id=pair_id, target_type="pair")
     return review

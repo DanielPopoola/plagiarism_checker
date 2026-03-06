@@ -12,7 +12,6 @@ from ..models import (
     AuditAction,
     AuditLog,
     Course,
-    CourseDepartment,
     Department,
     Enrollment,
     Role,
@@ -25,15 +24,17 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="templates")
 
 
-# ── JSON API ─────────────────────────────────────────────────────────────────
-
+# ── JSON API ──────────────────────────────────────────────────────────────────
 
 @router.get("/users", response_model=list[UserOut])
-def list_users(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(admin_only)]):
+def list_users(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(admin_only)],
+):
     return db.query(User).order_by(User.created_at.desc()).all()
 
 
-@router.patch("/users/{user_id}/deactivate")
+@router.patch("/users/{user_id}/deactivate", response_model=UserOut)
 def deactivate_user(
     user_id: int,
     request: Request,
@@ -47,14 +48,12 @@ def deactivate_user(
         raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
     target.is_active = False
     db.commit()
-    audit(
-        db, AuditAction.user_deactivated, user_id=admin.id, target_id=target.id, target_type="user"
-    )
+    audit(db, AuditAction.user_deactivated, user_id=admin.id, target_id=target.id, target_type="user")
     db.refresh(target)
     return target
 
 
-@router.patch("/users/{user_id}/activate")
+@router.patch("/users/{user_id}/activate", response_model=UserOut)
 def activate_user(
     user_id: int,
     request: Request,
@@ -66,16 +65,17 @@ def activate_user(
         raise HTTPException(status_code=404)
     target.is_active = True
     db.commit()
+    audit(db, AuditAction.user_activated, user_id=admin.id, target_id=target.id, target_type="user")
     db.refresh(target)
     return target
 
 
-@router.patch("/users/{user_id}/role")
+@router.patch("/users/{user_id}/role", response_model=UserOut)
 def change_role(
     user_id: int,
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(admin_only)],
-    role: str
+    role: str,
 ):
     target = db.get(User, user_id)
     if not target:
@@ -126,9 +126,6 @@ def create_department_api(
     return dept
 
 
-# ── Enrollment JSON API ───────────────────────────────────────────────────────
-
-
 @router.post("/enrollments")
 def enroll_student(
     student_id: int,
@@ -148,13 +145,7 @@ def enroll_student(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Already enrolled")
-    audit(
-        db,
-        AuditAction.enrollment_created,
-        user_id=admin.id,
-        target_id=course_id,
-        target_type="course",
-    )
+    audit(db, AuditAction.enrollment_created, user_id=admin.id, target_id=course_id, target_type="course")
     db.refresh(enrollment)
     return enrollment
 
@@ -172,7 +163,6 @@ def unenroll_student(
     db.commit()
 
 
-
 # ── HTML Pages ────────────────────────────────────────────────────────────────
 
 @router.get("/", response_class=HTMLResponse)
@@ -184,12 +174,12 @@ def admin_index(
     total_users = db.query(User).count()
     total_courses = db.query(Course).count()
     total_departments = db.query(Department).count()
-    total_submissions = db.query(Enrollment).count()
+    total_enrollments = db.query(Enrollment).count()
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(20).all()
     return templates.TemplateResponse("admin/index.html", {
         "request": request, "user": user,
         "total_users": total_users, "total_courses": total_courses,
-        "total_departments": total_departments, "total_submissions": total_submissions,
+        "total_departments": total_departments, "total_submissions": total_enrollments,
         "logs": logs,
     })
 
@@ -230,8 +220,7 @@ def admin_department_detail(
     dept = db.get(Department, dept_id)
     if not dept:
         raise HTTPException(status_code=404, detail="Department not found")
-    course_ids = [l.course_id for l in db.query(CourseDepartment).filter_by(department_id=dept_id).all()]
-    courses = db.query(Course).filter(Course.id.in_(course_ids)).order_by(Course.code).all()
+    courses = db.query(Course).filter_by(department_id=dept_id).order_by(Course.code).all()
     lecturers = db.query(User).filter(User.role.in_([Role.lecturer, Role.admin])).order_by(User.name).all()
     return templates.TemplateResponse("admin/department.html", {
         "request": request, "user": user,
@@ -261,7 +250,6 @@ def admin_course_detail(
 
 # ── HTML Form POSTs ───────────────────────────────────────────────────────────
 
-
 @router.post("/departments/new", response_class=HTMLResponse)
 async def create_department(
     db: Annotated[Session, Depends(get_db)],
@@ -288,17 +276,17 @@ async def create_course(
     description: str = Form(""),
     lecturer_id: int = Form(...),
     dept_id: int = Form(...),
-    department_ids: list[int] = Form(default=[]),
 ):
     lecturer = db.get(User, lecturer_id)
     if not lecturer or lecturer.role not in (Role.lecturer, Role.admin):
         raise HTTPException(status_code=400, detail="Selected user is not a lecturer")
-    course = Course(title=title, code=code, description=description or None, lecturer_id=lecturer_id)
+    course = Course(
+        title=title, code=code,
+        description=description or None,
+        department_id=dept_id,
+        lecturer_id=lecturer_id,
+    )
     db.add(course)
-    db.flush()
-    for department_id in department_ids:
-        if db.get(Department, department_id):
-            db.add(CourseDepartment(course_id=course.id, department_id=department_id))
     db.commit()
     audit(db, AuditAction.course_created, user_id=user.id, target_id=course.id, target_type="course")
     return RedirectResponse(url=f"/admin/departments-list/{dept_id}", status_code=303)
@@ -331,13 +319,10 @@ async def delete_course_form(
     course = db.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404)
-    # find first linked department for redirect
-    link = db.query(CourseDepartment).filter_by(course_id=course_id).first()
-    dept_id = link.department_id if link else None
+    dept_id = course.department_id
     db.delete(course)
     db.commit()
-    redirect = f"/admin/departments-list/{dept_id}" if dept_id else "/admin/departments-list"
-    return RedirectResponse(url=redirect, status_code=303)
+    return RedirectResponse(url=f"/admin/departments-list/{dept_id}", status_code=303)
 
 
 @router.post("/enrollments/new", response_class=HTMLResponse)

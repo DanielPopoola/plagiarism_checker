@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -5,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user, lecturer_or_admin
 from ..database import get_db
-from ..models import AuditAction, Course, CourseDepartment, Exam, Role, User
+from ..models import AuditAction, Course, Enrollment, Exam, Role, User
 from ..schemas import ExamCreate, ExamOut
 from ..services.audit import log as audit
 
@@ -16,8 +17,8 @@ def _assert_course_access(course_id: int, user: User, db: Session) -> Course:
     course = db.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    if user.role == Role.lecturer and course.lecturer_id != user.id:
-        raise HTTPException(status_code=403, detail="Not your course")
+    if user.role == Role.lecturer and course.department_id != user.department_id:
+        raise HTTPException(status_code=403, detail="Not your department")
     return course
 
 
@@ -38,24 +39,25 @@ def create_exam(
 
 @router.get("/", response_model=list[ExamOut])
 def list_exams(
-    db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(get_current_user)]
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
 ):
     if user.role == Role.admin:
         return db.query(Exam).all()
     if user.role == Role.lecturer:
-        course_ids = [c.id for c in db.query(Course).filter_by(lecturer_id=user.id).all()]
+        course_ids = [
+            c.id for c in db.query(Course).filter_by(department_id=user.department_id).all()
+        ]
         return db.query(Exam).filter(Exam.course_id.in_(course_ids)).all()
-    from datetime import UTC, datetime
-
+    # student: only exams for enrolled courses, within open window
     now = datetime.now(UTC).replace(tzinfo=None)
-    department_course_ids = [
-        link.course_id
-        for link in db.query(CourseDepartment).filter_by(department_id=user.department_id).all()
-    ]
+    enrolled_ids = [e.course_id for e in db.query(Enrollment).filter_by(student_id=user.id).all()]
     return (
         db.query(Exam)
         .filter(
-            Exam.course_id.in_(department_course_ids), Exam.opens_at <= now, Exam.closes_at >= now
+            Exam.course_id.in_(enrolled_ids),
+            Exam.opens_at <= now,
+            Exam.closes_at >= now,
         )
         .all()
     )
@@ -70,39 +72,4 @@ def get_exam(
     exam = db.get(Exam, exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
-    if user.role == Role.lecturer and exam.course.lecturer_id != user.id:
-        raise HTTPException(status_code=403, detail="Not your exam")
     return exam
-
-
-@router.put("/{exam_id}", response_model=ExamOut)
-def update_exam(
-    exam_id: int,
-    body: ExamCreate,
-    db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(lecturer_or_admin)],
-):
-    exam = db.get(Exam, exam_id)
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-    _assert_course_access(body.course_id, user, db)
-    for k, v in body.model_dump().items():
-        setattr(exam, k, v)
-    db.commit()
-    db.refresh(exam)
-    return exam
-
-
-@router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_exam(
-    exam_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(lecturer_or_admin)],
-):
-    exam = db.get(Exam, exam_id)
-    if not exam:
-        raise HTTPException(tatus_code=404, detail="Exam not found")
-    if user.role == Role.lecturer and exam.course.lecturer_id != user.id:
-        raise HTTPException(status_code=403, detail="Not your exam")
-    db.delete(exam)
-    db.commit()

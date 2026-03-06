@@ -59,6 +59,7 @@ class AuditAction(enum.StrEnum):
     report_exported = "report_exported"
     user_created = "user_created"
     user_deactivated = "user_deactivated"
+    user_activated = "user_activated"
     exam_created = "exam_created"
     course_created = "course_created"
     enrollment_created = "enrollment_created"
@@ -72,21 +73,7 @@ class Department(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     users = relationship("User", back_populates="department")
-    course_links = relationship(
-        "CourseDepartment", back_populates="department", cascade="all, delete-orphan"
-    )
-
-
-class CourseDepartment(Base):
-    __tablename__ = "course_departments"
-    id = Column(Integer, primary_key=True)
-    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
-    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
-
-    __table_args__ = (UniqueConstraint("course_id", "department_id", name="uq_course_department"),)
-
-    course = relationship("Course", back_populates="department_links")
-    department = relationship("Department", back_populates="course_links")
+    courses = relationship("Course", back_populates="department")
 
 
 class User(Base):
@@ -100,32 +87,28 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
-    courses = relationship("Course", back_populates="lecturer")
+    department = relationship("Department", back_populates="users")
+    taught_courses = relationship("Course", back_populates="lecturer")
     submissions = relationship("Submission", back_populates="student")
     audit_logs = relationship("AuditLog", back_populates="user")
     enrollments = relationship("Enrollment", back_populates="student")
-    department = relationship("Department", back_populates="users")
 
 
 class Course(Base):
     __tablename__ = "courses"
     id = Column(Integer, primary_key=True)
-    lecturer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
+    # lecturer_id is display-only — access control is via department_id
+    lecturer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     title = Column(String, nullable=False)
     code = Column(String, nullable=False)
     description = Column(Text)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
-    lecturer = relationship("User", back_populates="courses")
+    department = relationship("Department", back_populates="courses")
+    lecturer = relationship("User", back_populates="taught_courses")
     exams = relationship("Exam", back_populates="course")
     enrollments = relationship("Enrollment", back_populates="course")
-    department_links = relationship(
-        "CourseDepartment", back_populates="course", cascade="all, delete-orphan"
-    )
-
-    @property
-    def department_ids(self):
-        return [link.department_id for link in self.department_links]
 
 
 class Enrollment(Base):
@@ -158,10 +141,6 @@ class Exam(Base):
     submissions = relationship("Submission", back_populates="exam")
     job = relationship("PlagiarismJob", back_populates="exam", uselist=False)
 
-    @property
-    def lecturer_id(self):
-        return self.course.lecturer_id if self.course else None
-
 
 class Submission(Base):
     __tablename__ = "submissions"
@@ -169,9 +148,12 @@ class Submission(Base):
     exam_id = Column(Integer, ForeignKey("exams.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     file_path = Column(String, nullable=False)
+    original_filename = Column(String)
     extracted_text = Column(EncryptedText)
     originality_score = Column(Float)
     uploaded_at = Column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (UniqueConstraint("exam_id", "student_id", name="uq_submission"),)
 
     exam = relationship("Exam", back_populates="submissions")
     student = relationship("User", back_populates="submissions")

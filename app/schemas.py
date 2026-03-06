@@ -4,8 +4,8 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 from .models import AuditAction, JobStatus, PlagiarismType, ReviewStatus, Role
 
-# --- Auth ---
 
+# --- Auth ---
 
 class TokenOut(BaseModel):
     access_token: str
@@ -46,13 +46,12 @@ class DepartmentOut(BaseModel):
 
 # --- Course ---
 
-
 class CourseCreate(BaseModel):
     title: str
     code: str
     description: str | None = None
-    lecturer_id: int
-    department_ids: list[int] = []
+    department_id: int
+    lecturer_id: int | None = None
 
 
 class CourseOut(BaseModel):
@@ -60,14 +59,13 @@ class CourseOut(BaseModel):
     title: str
     code: str
     description: str | None
-    lecturer_id: int
-    department_ids: list[int] = []
+    department_id: int
+    lecturer_id: int | None
     created_at: datetime
     model_config = {"from_attributes": True}
 
 
 # --- Enrollment ---
-
 
 class EnrollmentOut(BaseModel):
     id: int
@@ -78,7 +76,6 @@ class EnrollmentOut(BaseModel):
 
 
 # --- Exam ---
-
 
 class ExamCreate(BaseModel):
     course_id: int
@@ -113,7 +110,6 @@ class ExamOut(BaseModel):
 
 # --- Submission ---
 
-
 class SubmissionOut(BaseModel):
     id: int
     exam_id: int
@@ -124,7 +120,6 @@ class SubmissionOut(BaseModel):
 
 
 # --- Job ---
-
 
 class JobOut(BaseModel):
     id: int
@@ -137,7 +132,6 @@ class JobOut(BaseModel):
 
 
 # --- Similarity / Reports ---
-
 
 class FragmentOut(BaseModel):
     id: int
@@ -174,7 +168,6 @@ class PairOut(BaseModel):
 
 # --- Review ---
 
-
 class ReviewCreate(BaseModel):
     status: ReviewStatus
     notes: str | None = None
@@ -191,7 +184,6 @@ class ReviewOut(BaseModel):
 
 
 # --- Audit ---
-
 
 class AuditLogOut(BaseModel):
     id: int
