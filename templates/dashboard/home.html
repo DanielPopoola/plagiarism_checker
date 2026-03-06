@@ -1,8 +1,9 @@
-{# templates/dashboard/home.html — Lecturer portal: course list with exam management #}
+{# templates/dashboard/home.html — Lecturer portal: course list #}
 {% extends "base.html" %}
 {% block title %}Dashboard · PlagCheck{% endblock %}
 {% block content %}
-<div class="max-w-5xl mx-auto w-full px-6 py-8">
+<div class="max-w-4xl mx-auto w-full px-6 py-8">
+
   <div class="flex items-center justify-between mb-8">
     <div>
       <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Lecturer Portal</p>
@@ -15,65 +16,45 @@
     </a>
   </div>
 
-  {% for course in courses %}
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-      <div class="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-        <span class="material-symbols-outlined text-primary" style="font-size:18px">school</span>
-      </div>
-      <div class="flex-1">
-        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ course.code }}</p>
-        <h2 class="text-base font-bold text-slate-800">{{ course.title }}</h2>
-      </div>
-      <a href="/dashboard/exams/new?course_id={{ course.id }}"
-         class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary border border-primary/20 bg-primary/5 rounded-lg hover:bg-primary/10 transition-colors">
-        <span class="material-symbols-outlined" style="font-size:14px">add</span>
-        Add exam
-      </a>
-    </div>
-    {% if course.exams %}
+  {% if courses %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
     <table class="w-full text-sm">
       <thead class="bg-slate-50 text-xs uppercase text-slate-500 tracking-wider font-semibold border-b border-slate-100">
         <tr>
-          <th class="px-6 py-3 text-left">Exam</th>
-          <th class="px-6 py-3 text-left">Submissions</th>
-          <th class="px-6 py-3 text-left">Opens</th>
-          <th class="px-6 py-3 text-left">Closes</th>
-          <th class="px-6 py-3 text-left">Threshold</th>
-          <th class="px-6 py-3 text-left">Analysis</th>
+          <th class="px-6 py-3 text-left">Course</th>
+          <th class="px-6 py-3 text-left">Exams</th>
+          <th class="px-6 py-3 text-right"></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
-        {% for exam in course.exams %}
-        {% set s = exam.job.status if exam.job else "no submissions" %}
-        {% set colors = {"pending": "bg-yellow-100 text-yellow-700", "running": "bg-blue-100 text-blue-700", "completed": "bg-green-100 text-green-700", "failed": "bg-red-100 text-red-600", "no submissions": "bg-slate-100 text-slate-400"} %}
+        {% for course in courses %}
         <tr class="hover:bg-slate-50 transition-colors">
-          <td class="px-6 py-3 font-semibold">
-            <a href="/dashboard/exams/{{ exam.id }}" class="text-slate-800 hover:text-primary transition-colors">{{ exam.title }}</a>
+          <td class="px-6 py-4">
+            <p class="font-semibold text-slate-800">{{ course.title }}</p>
+            <p class="text-xs text-slate-400 mt-0.5">{{ course.code }}</p>
           </td>
-          <td class="px-6 py-3 text-slate-500 text-xs font-semibold">{{ exam.submissions | length }}</td>
-          <td class="px-6 py-3 text-slate-500 text-xs">{{ exam.opens_at.strftime("%d %b %Y %H:%M") }}</td>
-          <td class="px-6 py-3 text-slate-500 text-xs">{{ exam.closes_at.strftime("%d %b %Y %H:%M") }}</td>
-          <td class="px-6 py-3 text-slate-500 text-xs font-semibold">{{ "%.0f"|format(exam.similarity_threshold * 100) }}%</td>
-          <td class="px-6 py-3">
-            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold {{ colors[s] }}">{{ s }}</span>
+          <td class="px-6 py-4 text-slate-500 text-xs font-semibold">
+            {{ course.exams | length }} exam{{ 's' if course.exams | length != 1 else '' }}
+          </td>
+          <td class="px-6 py-4 text-right">
+            <a href="/dashboard/courses/{{ course.id }}"
+               class="text-xs font-bold text-primary hover:underline">
+              View →
+            </a>
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
-    {% else %}
-    <p class="px-6 py-5 text-sm text-slate-400 italic">No exams yet.
-      <a href="/dashboard/exams/new?course_id={{ course.id }}" class="text-primary font-semibold hover:underline">Create one →</a>
-    </p>
-    {% endif %}
   </div>
+
   {% else %}
   <div class="bg-white rounded-xl border border-slate-200 p-14 text-center">
     <span class="material-symbols-outlined text-slate-300 block mb-3" style="font-size:48px">inbox</span>
     <p class="text-slate-400 font-medium">No courses assigned yet.</p>
     <p class="text-slate-400 text-sm mt-1">Contact an admin to have courses assigned to you.</p>
   </div>
-  {% endfor %}
+  {% endif %}
+
 </div>
 {% endblock %}

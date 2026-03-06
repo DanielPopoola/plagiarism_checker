@@ -1,146 +1,92 @@
-{# templates/student/dashboard.html — Student portal: open exams, course enrollment, submission history #}
+{# templates/student/dashboard.html — Student portal: summary hub #}
 {% extends "base.html" %}
 {% block title %}My Dashboard · PlagCheck{% endblock %}
 {% block content %}
-<div class="max-w-4xl mx-auto w-full px-6 py-8">
+<div class="max-w-3xl mx-auto w-full px-6 py-8">
 
   <div class="mb-8">
     <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Student Portal</p>
-    <h1 class="text-2xl font-extrabold tracking-tight">My Dashboard</h1>
+    <h1 class="text-2xl font-extrabold tracking-tight">Welcome, {{ user.name.split()[0] }}</h1>
   </div>
 
-  {# ── Open Exams ── #}
-  <div class="mb-8">
-    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Open for Submission</h2>
-    {% if open_exams %}
-    <div class="flex flex-col gap-3">
+  {# ── Open exams callout — show prominently if any are open ── #}
+  {% if open_exams %}
+  <div class="bg-primary/5 border border-primary/20 rounded-xl px-5 py-4 mb-6">
+    <p class="text-xs font-bold text-primary uppercase tracking-wider mb-2">
+      {{ open_exams | length }} exam{{ 's' if open_exams | length != 1 else '' }} open now
+    </p>
+    <div class="flex flex-col gap-2">
       {% for exam in open_exams %}
-      <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center justify-between">
+      <div class="flex items-center justify-between">
         <div>
-          <p class="font-bold text-slate-800">{{ exam.title }}</p>
-          <p class="text-sm text-slate-400 mt-0.5">
-            {% if exam.course %}{{ exam.course.code }} · {% endif %}Closes {{ exam.closes_at.strftime("%d %b %Y %H:%M") }}
-          </p>
+          <span class="text-sm font-semibold text-slate-800">{{ exam.title }}</span>
+          <span class="text-xs text-slate-400 ml-2">
+            {% if exam.course %}{{ exam.course.code }} · {% endif %}closes {{ exam.closes_at.strftime("%d %b %H:%M") }}
+          </span>
         </div>
         <a href="/student/exams/{{ exam.id }}/submit"
-           class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
-          <span class="material-symbols-outlined" style="font-size:16px">upload_file</span>
+           class="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/90 transition-all shadow shadow-primary/20">
+          <span class="material-symbols-outlined" style="font-size:14px">upload_file</span>
           Submit
         </a>
       </div>
       {% endfor %}
     </div>
-    {% elif not enrolled_ids %}
-    <div class="bg-white rounded-xl border border-slate-200 p-8 text-center">
-      <span class="material-symbols-outlined text-slate-300 block mb-2" style="font-size:36px">school</span>
-      <p class="text-slate-600 text-sm font-semibold">You're not enrolled in any courses yet.</p>
-      <p class="text-slate-400 text-xs mt-1">Enrol in a course below to see available exams.</p>
-    </div>
-    {% else %}
-    <div class="bg-white rounded-xl border border-slate-200 p-8 text-center">
-      <span class="material-symbols-outlined text-slate-300 block mb-2" style="font-size:36px">event_available</span>
-      <p class="text-slate-400 text-sm font-medium">No exams currently open for your enrolled courses.</p>
-    </div>
-    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ── Stat cards ── #}
+  <div class="grid grid-cols-3 gap-4 mb-8">
+    <a href="/student/courses"
+       class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-5 hover:border-primary/30 hover:shadow-md transition-all group">
+      <p class="text-3xl font-extrabold text-slate-800 group-hover:text-primary transition-colors">
+        {{ enrolled_count }}
+      </p>
+      <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Enrolled Courses</p>
+      <p class="text-xs text-primary font-semibold mt-3 group-hover:underline">Manage →</p>
+    </a>
+
+    <a href="/student/courses"
+       class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-5 hover:border-primary/30 hover:shadow-md transition-all group">
+      <p class="text-3xl font-extrabold text-slate-800 group-hover:text-primary transition-colors">
+        {{ open_exams | length }}
+      </p>
+      <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Open Exams</p>
+      <p class="text-xs text-primary font-semibold mt-3 group-hover:underline">Browse →</p>
+    </a>
+
+    <a href="/student/submissions"
+       class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-5 hover:border-primary/30 hover:shadow-md transition-all group">
+      <p class="text-3xl font-extrabold text-slate-800 group-hover:text-primary transition-colors">
+        {{ submission_count }}
+      </p>
+      <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Submissions</p>
+      <p class="text-xs text-primary font-semibold mt-3 group-hover:underline">View history →</p>
+    </a>
   </div>
 
-  {# ── My Courses (self-enrollment) ── #}
-  <div class="mb-8">
-    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">My Courses</h2>
-    {% if all_courses %}
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-xs uppercase text-slate-500 tracking-wider font-semibold border-b border-slate-100">
-          <tr>
-            <th class="px-5 py-3 text-left">Course</th>
-            <th class="px-5 py-3 text-left">Lecturer</th>
-            <th class="px-5 py-3 text-right"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for course in all_courses %}
-          {% set enrolled = course.id in enrolled_ids %}
-          <tr class="hover:bg-slate-50 transition-colors">
-            <td class="px-5 py-3">
-              <p class="font-semibold text-slate-800">{{ course.title }}</p>
-              <p class="text-xs text-slate-400">{{ course.code }}</p>
-            </td>
-            <td class="px-5 py-3 text-slate-500 text-sm">
-              {% if course.lecturer %}{{ course.lecturer.name }}{% else %}—{% endif %}
-            </td>
-            <td class="px-5 py-3 text-right">
-              {% if enrolled %}
-              <form method="post" action="/student/courses/{{ course.id }}/unenroll" class="inline">
-                <button type="submit"
-                        class="text-xs text-slate-400 border border-slate-200 px-3 py-1.5 rounded-lg hover:border-red-300 hover:text-red-500 transition-colors font-semibold">
-                  Leave
-                </button>
-              </form>
-              {% else %}
-              <form method="post" action="/student/courses/{{ course.id }}/enroll" class="inline">
-                <button type="submit"
-                        class="text-xs text-primary border border-primary/20 bg-primary/5 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-colors font-bold">
-                  Enrol
-                </button>
-              </form>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="bg-white rounded-xl border border-slate-200 p-8 text-center">
-      <span class="material-symbols-outlined text-slate-300 block mb-2" style="font-size:36px">school</span>
-      <p class="text-slate-400 text-sm font-medium">No courses available yet.</p>
-    </div>
-    {% endif %}
+  {# ── Quick links ── #}
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Quick Access</h2>
+  <div class="flex flex-col gap-3">
+    <a href="/student/courses"
+       class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-3 hover:border-primary/30 hover:shadow-md transition-all group">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">school</span>
+      <div class="flex-1">
+        <p class="text-sm font-bold text-slate-700">My Courses</p>
+        <p class="text-xs text-slate-400">Browse and enrol in department courses</p>
+      </div>
+      <span class="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors" style="font-size:18px">chevron_right</span>
+    </a>
+    <a href="/student/submissions"
+       class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-3 hover:border-primary/30 hover:shadow-md transition-all group">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">history</span>
+      <div class="flex-1">
+        <p class="text-sm font-bold text-slate-700">Submission History</p>
+        <p class="text-xs text-slate-400">View all your past exam submissions</p>
+      </div>
+      <span class="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors" style="font-size:18px">chevron_right</span>
+    </a>
   </div>
 
-  {# ── Submission History ── #}
-  <div>
-    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">My Submissions</h2>
-    {% if submissions %}
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-xs uppercase text-slate-500 tracking-wider font-semibold border-b border-slate-100">
-          <tr>
-            <th class="px-5 py-3 text-left">Exam</th>
-            <th class="px-5 py-3 text-left">Submitted</th>
-            <th class="px-5 py-3 text-left">Originality</th>
-            <th class="px-5 py-3"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for sub in submissions %}
-          <tr class="hover:bg-slate-50 transition-colors">
-            <td class="px-5 py-4 font-semibold text-slate-800">{{ sub.exam.title }}</td>
-            <td class="px-5 py-4 text-slate-500 text-xs">{{ sub.uploaded_at.strftime("%d %b %Y %H:%M") }}</td>
-            <td class="px-5 py-4">
-              {% if sub.originality_score is not none %}
-                {% set score = (sub.originality_score * 100)|int %}
-                {% set color = "text-green-600" if score >= 70 else ("text-amber-500" if score >= 40 else "text-red-600") %}
-                <span class="font-black text-lg {{ color }}">{{ score }}%</span>
-                <span class="text-slate-400 text-xs ml-1">original</span>
-              {% else %}
-                <span class="text-slate-300 text-xs">Pending analysis</span>
-              {% endif %}
-            </td>
-            <td class="px-5 py-4 text-right">
-              <a href="/student/submissions/{{ sub.id }}" class="text-xs text-primary font-semibold hover:underline">View report →</a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="bg-white rounded-xl border border-slate-200 p-10 text-center">
-      <span class="material-symbols-outlined text-slate-300 block mb-2" style="font-size:36px">description</span>
-      <p class="text-slate-400 text-sm font-medium">No submissions yet.</p>
-    </div>
-    {% endif %}
-  </div>
 </div>
 {% endblock %}

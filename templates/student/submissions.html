@@ -1,0 +1,66 @@
+{# templates/student/submissions.html — Student portal: submission history #}
+{% extends "base.html" %}
+{% block title %}My Submissions · PlagCheck{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto w-full px-6 py-8">
+
+  <nav class="flex items-center gap-2 text-xs text-slate-400 font-semibold uppercase tracking-wider mb-6">
+    <a href="/student/dashboard" class="hover:text-primary transition-colors">Dashboard</a>
+    <span class="material-symbols-outlined" style="font-size:14px">chevron_right</span>
+    <span class="text-slate-700">My Submissions</span>
+  </nav>
+
+  <div class="mb-6">
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Student Portal</p>
+    <h1 class="text-2xl font-extrabold tracking-tight">My Submissions</h1>
+  </div>
+
+  {% if submissions %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs uppercase text-slate-500 tracking-wider font-semibold border-b border-slate-100">
+        <tr>
+          <th class="px-6 py-3 text-left">Exam</th>
+          <th class="px-6 py-3 text-left">Course</th>
+          <th class="px-6 py-3 text-left">Submitted</th>
+          <th class="px-6 py-3 text-left">File</th>
+          <th class="px-6 py-3 text-right"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for sub in submissions %}
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-6 py-4 font-semibold text-slate-800">{{ sub.exam.title }}</td>
+          <td class="px-6 py-4 text-slate-500 text-xs">
+            {% if sub.exam.course %}{{ sub.exam.course.code }}{% else %}—{% endif %}
+          </td>
+          <td class="px-6 py-4 text-slate-500 text-xs">
+            {{ sub.uploaded_at.strftime("%d %b %Y %H:%M") }}
+          </td>
+          <td class="px-6 py-4 text-slate-500 text-xs font-mono">
+            {{ sub.original_filename or '—' }}
+          </td>
+          <td class="px-6 py-4 text-right">
+            <a href="/student/submissions/{{ sub.id }}"
+               class="text-xs font-bold text-primary hover:underline">
+              View →
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="bg-white rounded-xl border border-slate-200 p-14 text-center">
+    <span class="material-symbols-outlined text-slate-300 block mb-3" style="font-size:48px">description</span>
+    <p class="text-slate-400 font-medium">No submissions yet.</p>
+    <p class="text-slate-400 text-sm mt-1">
+      Once you submit to an open exam it will appear here.
+    </p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

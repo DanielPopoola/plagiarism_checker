@@ -1,0 +1,85 @@
+{# templates/dashboard/course.html — Lecturer portal: single course exam list #}
+{% extends "base.html" %}
+{% block title %}{{ course.code }} · PlagCheck{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto w-full px-6 py-8">
+
+  <nav class="flex items-center gap-2 text-xs text-slate-400 font-semibold uppercase tracking-wider mb-6">
+    <a href="/dashboard/" class="hover:text-primary transition-colors">Dashboard</a>
+    <span class="material-symbols-outlined" style="font-size:14px">chevron_right</span>
+    <span class="text-slate-700">{{ course.code }}</span>
+  </nav>
+
+  <div class="flex items-start justify-between mb-8">
+    <div>
+      <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{{ course.code }}</p>
+      <h1 class="text-2xl font-extrabold tracking-tight">{{ course.title }}</h1>
+      {% if course.description %}
+      <p class="text-slate-500 text-sm mt-2 max-w-xl">{{ course.description }}</p>
+      {% endif %}
+    </div>
+    <a href="/dashboard/exams/new?course_id={{ course.id }}"
+       class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+      <span class="material-symbols-outlined text-primary" style="font-size:16px">add</span>
+      New Exam
+    </a>
+  </div>
+
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Exams</h2>
+
+  {% if course.exams %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs uppercase text-slate-500 tracking-wider font-semibold border-b border-slate-100">
+        <tr>
+          <th class="px-6 py-3 text-left">Title</th>
+          <th class="px-6 py-3 text-left">Submissions</th>
+          <th class="px-6 py-3 text-left">Opens</th>
+          <th class="px-6 py-3 text-left">Closes</th>
+          <th class="px-6 py-3 text-left">Analysis</th>
+          <th class="px-6 py-3 text-right"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for exam in course.exams %}
+        {% set s = exam.job.status if exam.job else "no submissions" %}
+        {% set colors = {
+          "pending":      "bg-yellow-100 text-yellow-700",
+          "running":      "bg-blue-100 text-blue-700",
+          "completed":    "bg-green-100 text-green-700",
+          "failed":       "bg-red-100 text-red-600",
+          "no submissions": "bg-slate-100 text-slate-400"
+        } %}
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-6 py-4 font-semibold text-slate-800">{{ exam.title }}</td>
+          <td class="px-6 py-4 text-slate-500 text-xs font-semibold">{{ exam.submissions | length }}</td>
+          <td class="px-6 py-4 text-slate-500 text-xs">{{ exam.opens_at.strftime("%d %b %Y %H:%M") }}</td>
+          <td class="px-6 py-4 text-slate-500 text-xs">{{ exam.closes_at.strftime("%d %b %Y %H:%M") }}</td>
+          <td class="px-6 py-4">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold {{ colors[s] }}">{{ s }}</span>
+          </td>
+          <td class="px-6 py-4 text-right">
+            <a href="/dashboard/exams/{{ exam.id }}"
+               class="text-xs font-bold text-primary hover:underline">
+              View →
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="bg-white rounded-xl border border-slate-200 p-10 text-center">
+    <span class="material-symbols-outlined text-slate-300 block mb-3" style="font-size:40px">description</span>
+    <p class="text-slate-400 font-medium text-sm">No exams yet.</p>
+    <a href="/dashboard/exams/new?course_id={{ course.id }}"
+       class="inline-block mt-3 text-xs font-bold text-primary hover:underline">
+      Create the first exam →
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
