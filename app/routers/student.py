@@ -1,24 +1,14 @@
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import (
-    AuditAction,
-    Course,
-    Enrollment,
-    Exam,
-    Role,
-    SimilarityPair,
-    Submission,
-    User,
-)
-from ..services.audit import log as audit
+from ..models import Role, User
+from ..services import student as student_svc
+from ..services import submission as sub_svc
 from ..templates import templates
 
 router = APIRouter(prefix="/student", tags=["student"])
@@ -29,9 +19,6 @@ def _require_student(user: User) -> None:
         raise HTTPException(status_code=403, detail="Students only")
 
 
-# --- Dashboard ---
-
-
 @router.get("/dashboard", response_class=HTMLResponse)
 def student_dashboard(
     request: Request,
@@ -39,35 +26,10 @@ def student_dashboard(
     user: Annotated[User, Depends(get_current_user)],
 ):
     _require_student(user)
-    now = datetime.now(UTC).replace(tzinfo=None)
-
-    enrolled_ids = [e.course_id for e in db.query(Enrollment).filter_by(student_id=user.id).all()]
-    open_exams = (
-        db.query(Exam)
-        .filter(
-            Exam.course_id.in_(enrolled_ids),
-            Exam.opens_at <= now,
-            Exam.closes_at >= now,
-        )
-        .all()
-        if enrolled_ids
-        else []
-    )
-    submission_count = db.query(Submission).filter_by(student_id=user.id).count()
-
+    ctx = student_svc.get_dashboard_data(db, user)
     return templates.TemplateResponse(
-        "student/dashboard.html",
-        {
-            "request": request,
-            "user": user,
-            "open_exams": open_exams,
-            "enrolled_count": len(enrolled_ids),
-            "submission_count": submission_count,
-        },
+        "student/dashboard.html", {"request": request, "user": user, **ctx}
     )
-
-
-# --- Courses ---
 
 
 @router.get("/courses", response_class=HTMLResponse)
@@ -77,55 +39,10 @@ def browse_courses(
     user: Annotated[User, Depends(get_current_user)],
 ):
     _require_student(user)
-    enrolled_ids = {e.course_id for e in db.query(Enrollment).filter_by(student_id=user.id).all()}
-    courses = (
-        db.query(Course).filter_by(department_id=user.department_id).order_by(Course.code).all()
-    )
+    ctx = student_svc.browse_courses(db, user)
     return templates.TemplateResponse(
-        "student/courses.html",
-        {"request": request, "user": user, "courses": courses, "enrolled_ids": enrolled_ids},
+        "student/courses.html", {"request": request, "user": user, **ctx}
     )
-
-
-@router.post("/courses/{course_id}/enroll", response_class=HTMLResponse)
-def enroll(
-    course_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_user)],
-):
-    _require_student(user)
-    course = db.get(Course, course_id)
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-    if course.department_id != user.department_id:
-        raise HTTPException(status_code=403, detail="Course is not in your department")
-    db.add(Enrollment(student_id=user.id, course_id=course_id))
-    try:
-        db.commit()
-        audit(
-            db,
-            AuditAction.enrollment_created,
-            user_id=user.id,
-            target_id=course_id,
-            target_type="course",
-        )
-    except IntegrityError:
-        db.rollback()
-    return RedirectResponse(url="/student/courses", status_code=303)
-
-
-@router.post("/courses/{course_id}/unenroll", response_class=HTMLResponse)
-def unenroll(
-    course_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_user)],
-):
-    _require_student(user)
-    e = db.query(Enrollment).filter_by(student_id=user.id, course_id=course_id).first()
-    if e:
-        db.delete(e)
-        db.commit()
-    return RedirectResponse(url="/student/courses", status_code=303)
 
 
 @router.get("/courses/{course_id}", response_class=HTMLResponse)
@@ -136,50 +53,32 @@ def course_detail(
     user: Annotated[User, Depends(get_current_user)],
 ):
     _require_student(user)
-    now = datetime.now(UTC).replace(tzinfo=None)
-
-    course = db.get(Course, course_id)
-    if not course or course.department_id != user.department_id:
-        raise HTTPException(status_code=404)
-
-    enrolled = db.query(Enrollment).filter_by(student_id=user.id, course_id=course_id).first()
-
-    exams = (
-        db.query(Exam).filter_by(course_id=course_id).order_by(Exam.opens_at.desc()).all()
-        if enrolled
-        else []
-    )
-
-    # For each exam, check if this student already submitted
-    submitted_exam_ids = (
-        {
-            s.exam_id
-            for s in db.query(Submission)
-            .filter(
-                Submission.student_id == user.id,
-                Submission.exam_id.in_([e.id for e in exams]),
-            )
-            .all()
-        }
-        if exams
-        else set()
-    )
-
+    ctx = student_svc.get_course_detail(db, course_id, user)
     return templates.TemplateResponse(
-        "student/course.html",
-        {
-            "request": request,
-            "user": user,
-            "course": course,
-            "enrolled": enrolled,
-            "exams": exams,
-            "submitted_exam_ids": submitted_exam_ids,
-            "now": now,
-        },
+        "student/course.html", {"request": request, "user": user, **ctx}
     )
 
 
-# --- Submit ---
+@router.post("/courses/{course_id}/enroll", response_class=HTMLResponse)
+def enroll(
+    course_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    _require_student(user)
+    student_svc.enroll_student(db, course_id, user)
+    return RedirectResponse(url="/student/courses", status_code=303)
+
+
+@router.post("/courses/{course_id}/unenroll", response_class=HTMLResponse)
+def unenroll(
+    course_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    _require_student(user)
+    student_svc.unenroll_student(db, course_id, user)
+    return RedirectResponse(url="/student/courses", status_code=303)
 
 
 @router.get("/exams/{exam_id}/submit", response_class=HTMLResponse)
@@ -190,19 +89,9 @@ def submit_form(
     user: Annotated[User, Depends(get_current_user)],
 ):
     _require_student(user)
-    now = datetime.now(UTC).replace(tzinfo=None)
-    exam = db.get(Exam, exam_id)
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-    if not (exam.opens_at <= now <= exam.closes_at):
-        raise HTTPException(status_code=400, detail="Submission window is not open")
-    enrolled = db.query(Enrollment).filter_by(student_id=user.id, course_id=exam.course_id).first()
-    if not enrolled:
-        raise HTTPException(status_code=403, detail="You are not enrolled in this course")
-    existing = db.query(Submission).filter_by(exam_id=exam_id, student_id=user.id).first()
+    ctx = student_svc.get_submit_form_data(db, exam_id, user)
     return templates.TemplateResponse(
-        "student/submit.html",
-        {"request": request, "user": user, "exam": exam, "error": None, "existing": existing},
+        "student/submit.html", {"request": request, "user": user, "error": None, **ctx}
     )
 
 
@@ -214,61 +103,26 @@ async def submit_file(
     user: Annotated[User, Depends(get_current_user)],
 ):
     _require_student(user)
-    from ..routers.submissions import upload_submission
-
-    # Block duplicate submission
-    if db.query(Submission).filter_by(exam_id=exam_id, student_id=user.id).first():
-        exam = db.get(Exam, exam_id)
-        return templates.TemplateResponse(
-            "student/submit.html",
-            {
-                "request": request,
-                "user": user,
-                "exam": exam,
-                "error": "You have already submitted for this exam.",
-                "existing": True,
-            },
-            status_code=400,
-        )
-
     form = await request.form()
     file: UploadFile = form.get("file")
+
+    def _err(msg: str, status: int = 400):
+        from ..repositories import exam as exam_repo
+
+        exam = exam_repo.get(db, exam_id)
+        return templates.TemplateResponse(
+            "student/submit.html",
+            {"request": request, "user": user, "exam": exam, "error": msg, "existing": None},
+            status_code=status,
+        )
+
     if not file:
-        exam = db.get(Exam, exam_id)
-        return templates.TemplateResponse(
-            "student/submit.html",
-            {
-                "request": request,
-                "user": user,
-                "exam": exam,
-                "error": "No file selected.",
-                "existing": None,
-            },
-            status_code=400,
-        )
-
+        return _err("No file selected.")
     try:
-        await upload_submission(exam_id=exam_id, file=file, db=db, user=user)
+        sub_svc.upload(db, exam_id, file, user, request.client.host if request.client else None)
     except HTTPException as exc:
-        exam = db.get(Exam, exam_id)
-        return templates.TemplateResponse(
-            "student/submit.html",
-            {"request": request, "user": user, "exam": exam, "error": exc.detail, "existing": None},
-            status_code=exc.status_code,
-        )
-
-    audit(
-        db,
-        AuditAction.submission_upload,
-        user_id=user.id,
-        target_id=exam_id,
-        target_type="exam",
-        ip_address=request.client.host if request.client else None,
-    )
+        return _err(exc.detail, exc.status_code)
     return RedirectResponse(url="/student/dashboard", status_code=303)
-
-
-# --- Submissions ---
 
 
 @router.get("/submissions", response_class=HTMLResponse)
@@ -278,15 +132,11 @@ def submission_list(
     user: Annotated[User, Depends(get_current_user)],
 ):
     _require_student(user)
-    submissions = (
-        db.query(Submission)
-        .filter_by(student_id=user.id)
-        .order_by(Submission.uploaded_at.desc())
-        .all()
-    )
+    from ..repositories import submission as sub_repo
+
+    submissions = sub_repo.list_by_student(db, user.id)
     return templates.TemplateResponse(
-        "student/submissions.html",
-        {"request": request, "user": user, "submissions": submissions},
+        "student/submissions.html", {"request": request, "user": user, "submissions": submissions}
     )
 
 
@@ -298,27 +148,7 @@ def submission_detail(
     user: Annotated[User, Depends(get_current_user)],
 ):
     _require_student(user)
-    sub = db.get(Submission, submission_id)
-    if not sub or sub.student_id != user.id:
-        raise HTTPException(status_code=404, detail="Submission not found")
-
-    pairs = (
-        db.query(SimilarityPair)
-        .filter(
-            (SimilarityPair.submission_a_id == submission_id)
-            | (SimilarityPair.submission_b_id == submission_id)
-        )
-        .order_by(SimilarityPair.similarity_score.desc())
-        .all()
-    )
-    audit(
-        db,
-        AuditAction.report_viewed,
-        user_id=user.id,
-        target_id=submission_id,
-        target_type="submission",
-    )
+    ctx = student_svc.get_submission_detail(db, submission_id, user)
     return templates.TemplateResponse(
-        "student/submission.html",
-        {"request": request, "user": user, "sub": sub, "exam": sub.exam, "pairs": pairs},
+        "student/submission.html", {"request": request, "user": user, **ctx}
     )

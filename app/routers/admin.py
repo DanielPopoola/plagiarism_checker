@@ -1,23 +1,17 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth import admin_only
 from ..database import get_db
-from ..models import (
-    AuditAction,
-    AuditLog,
-    Course,
-    Department,
-    Enrollment,
-    Role,
-    User,
-)
+from ..models import Role, User
+from ..repositories import course as course_repo
+from ..repositories import department as dept_repo
+from ..repositories import user as user_repo
 from ..schemas import DepartmentOut, UserOut
-from ..services.audit import log as audit
+from ..services import admin as admin_svc
 from ..templates import templates
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -27,85 +21,43 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/users", response_model=list[UserOut])
-def list_users(
-    db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(admin_only)],
-):
-    return db.query(User).order_by(User.created_at.desc()).all()
+def list_users(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(admin_only)]):
+    return user_repo.list_all(db)
 
 
 @router.patch("/users/{user_id}/deactivate", response_model=UserOut)
 def deactivate_user(
     user_id: int,
-    request: Request,
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(admin_only)],
 ):
-    target = db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404)
-    if target.id == admin.id:
-        raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
-    target.is_active = False
-    db.commit()
-    audit(
-        db, AuditAction.user_deactivated, user_id=admin.id, target_id=target.id, target_type="user"
-    )
-    db.refresh(target)
-    return target
+    return admin_svc.toggle_user(db, user_id, activate=False, actor_id=admin.id)
 
 
 @router.patch("/users/{user_id}/activate", response_model=UserOut)
 def activate_user(
     user_id: int,
-    request: Request,
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(admin_only)],
 ):
-    target = db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404)
-    target.is_active = True
-    db.commit()
-    audit(db, AuditAction.user_activated, user_id=admin.id, target_id=target.id, target_type="user")
-    db.refresh(target)
-    return target
+    return admin_svc.toggle_user(db, user_id, activate=True, actor_id=admin.id)
 
 
 @router.patch("/users/{user_id}/role", response_model=UserOut)
 def change_role(
     user_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    admin: Annotated[User, Depends(admin_only)],
     role: str,
-):
-    target = db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404)
-    try:
-        target.role = Role(role)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid role: {role}") from ValueError
-    db.commit()
-    db.refresh(target)
-    return target
-
-
-@router.get("/audit-logs", response_model=list)
-def get_audit_logs(
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(admin_only)],
-    limit: int = 100,
 ):
-    return db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
+    return admin_svc.set_role(db, user_id, role)
 
 
 @router.get("/departments", response_model=list[DepartmentOut])
 def list_departments(
-    db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(admin_only)],
+    db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(admin_only)]
 ):
-    return db.query(Department).order_by(Department.name).all()
+    return dept_repo.list_all(db)
 
 
 @router.post("/departments")
@@ -115,19 +67,7 @@ def create_department_api(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
 ):
-    dept = Department(name=name.strip(), code=code.strip().upper())
-    db.add(dept)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        dept = db.query(Department).filter_by(code=code.strip().upper()).first()
-        if not dept:
-            raise HTTPException(
-                status_code=409, detail="Department already exists"
-            ) from IntegrityError
-    db.refresh(dept)
-    return dept
+    return admin_svc.create_department(db, name, code)
 
 
 @router.post("/enrollments")
@@ -137,27 +77,7 @@ def enroll_student(
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(admin_only)],
 ):
-    student = db.get(User, student_id)
-    if not student or student.role != Role.student:
-        raise HTTPException(status_code=400, detail="User is not a student")
-    if not db.get(Course, course_id):
-        raise HTTPException(status_code=404, detail="Course not found")
-    enrollment = Enrollment(student_id=student_id, course_id=course_id)
-    db.add(enrollment)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="Already enrolled") from IntegrityError
-    audit(
-        db,
-        AuditAction.enrollment_created,
-        user_id=admin.id,
-        target_id=course_id,
-        target_type="course",
-    )
-    db.refresh(enrollment)
-    return enrollment
+    return admin_svc.enroll_student(db, student_id, course_id, admin.id)
 
 
 @router.delete("/enrollments/{enrollment_id}", status_code=204)
@@ -166,11 +86,7 @@ def unenroll_student(
     db: Annotated[Session, Depends(get_db)],
     admin: Annotated[User, Depends(admin_only)],
 ):
-    e = db.get(Enrollment, enrollment_id)
-    if not e:
-        raise HTTPException(status_code=404)
-    db.delete(e)
-    db.commit()
+    admin_svc.unenroll_student(db, enrollment_id)
 
 
 # ── HTML Pages ────────────────────────────────────────────────────────────────
@@ -182,22 +98,9 @@ def admin_index(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
 ):
-    total_users = db.query(User).count()
-    total_courses = db.query(Course).count()
-    total_departments = db.query(Department).count()
-    total_enrollments = db.query(Enrollment).count()
-    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(20).all()
+    stats = admin_svc.get_dashboard_stats(db)
     return templates.TemplateResponse(
-        "admin/index.html",
-        {
-            "request": request,
-            "user": user,
-            "total_users": total_users,
-            "total_courses": total_courses,
-            "total_departments": total_departments,
-            "total_submissions": total_enrollments,
-            "logs": logs,
-        },
+        "admin/index.html", {"request": request, "user": user, **stats}
     )
 
 
@@ -207,15 +110,13 @@ def admin_users(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
 ):
-    users = db.query(User).order_by(User.created_at.desc()).all()
-    departments = db.query(Department).order_by(Department.name).all()
     return templates.TemplateResponse(
         "admin/users.html",
         {
             "request": request,
             "user": user,
-            "users": users,
-            "departments": departments,
+            "users": user_repo.list_all(db),
+            "departments": dept_repo.list_all(db),
         },
     )
 
@@ -226,13 +127,12 @@ def admin_departments(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
 ):
-    departments = db.query(Department).order_by(Department.name).all()
     return templates.TemplateResponse(
         "admin/departments.html",
         {
             "request": request,
             "user": user,
-            "departments": departments,
+            "departments": dept_repo.list_all(db),
         },
     )
 
@@ -244,10 +144,7 @@ def admin_department_detail(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
 ):
-    dept = db.get(Department, dept_id)
-    if not dept:
-        raise HTTPException(status_code=404, detail="Department not found")
-    courses = db.query(Course).filter_by(department_id=dept_id).order_by(Course.code).all()
+    dept = dept_repo.get(db, dept_id)
     lecturers = (
         db.query(User).filter(User.role.in_([Role.lecturer, Role.admin])).order_by(User.name).all()
     )
@@ -257,7 +154,7 @@ def admin_department_detail(
             "request": request,
             "user": user,
             "dept": dept,
-            "courses": courses,
+            "courses": course_repo.list_by_dept(db, dept_id),
             "lecturers": lecturers,
         },
     )
@@ -270,9 +167,7 @@ def admin_course_detail(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
 ):
-    course = db.get(Course, course_id)
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
+    course = course_repo.get(db, course_id)
     lecturers = (
         db.query(User).filter(User.role.in_([Role.lecturer, Role.admin])).order_by(User.name).all()
     )
@@ -301,18 +196,12 @@ async def create_department(
     name: str = Form(...),
     code: str = Form(...),
 ):
-    dept = Department(name=name.strip(), code=code.strip().upper())
-    db.add(dept)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
+    admin_svc.create_department(db, name, code)
     return RedirectResponse(url="/admin/departments-list", status_code=303)
 
 
 @router.post("/courses/new", response_class=HTMLResponse)
 async def create_course(
-    request: Request,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
     title: str = Form(...),
@@ -321,21 +210,7 @@ async def create_course(
     lecturer_id: int = Form(...),
     dept_id: int = Form(...),
 ):
-    lecturer = db.get(User, lecturer_id)
-    if not lecturer or lecturer.role not in (Role.lecturer, Role.admin):
-        raise HTTPException(status_code=400, detail="Selected user is not a lecturer")
-    course = Course(
-        title=title,
-        code=code,
-        description=description or None,
-        department_id=dept_id,
-        lecturer_id=lecturer_id,
-    )
-    db.add(course)
-    db.commit()
-    audit(
-        db, AuditAction.course_created, user_id=user.id, target_id=course.id, target_type="course"
-    )
+    admin_svc.create_course(db, title, code, description, lecturer_id, dept_id, user.id)
     return RedirectResponse(url=f"/admin/departments-list/{dept_id}", status_code=303)
 
 
@@ -346,29 +221,17 @@ async def assign_course_lecturer(
     user: Annotated[User, Depends(admin_only)],
     lecturer_id: int = Form(...),
 ):
-    course = db.get(Course, course_id)
-    if not course:
-        raise HTTPException(status_code=404)
-    lecturer = db.get(User, lecturer_id)
-    if not lecturer or lecturer.role not in (Role.lecturer, Role.admin):
-        raise HTTPException(status_code=400, detail="Selected user is not a lecturer")
-    course.lecturer_id = lecturer.id
-    db.commit()
+    admin_svc.assign_lecturer(db, course_id, lecturer_id)
     return RedirectResponse(url=f"/admin/courses-list/{course_id}", status_code=303)
 
 
 @router.post("/courses/{course_id}/delete", response_class=HTMLResponse)
-async def delete_course_form(
+async def delete_course(
     course_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
 ):
-    course = db.get(Course, course_id)
-    if not course:
-        raise HTTPException(status_code=404)
-    dept_id = course.department_id
-    db.delete(course)
-    db.commit()
+    dept_id = admin_svc.delete_course(db, course_id)
     return RedirectResponse(url=f"/admin/departments-list/{dept_id}", status_code=303)
 
 
@@ -379,25 +242,7 @@ async def enroll_student_form(
     student_id: int = Form(...),
     course_id: int = Form(...),
 ):
-    student = db.get(User, student_id)
-    course = db.get(Course, course_id)
-    if not student or student.role != Role.student:
-        raise HTTPException(status_code=400)
-    if not course:
-        raise HTTPException(status_code=404)
-    enrollment = Enrollment(student_id=student_id, course_id=course_id)
-    db.add(enrollment)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-    audit(
-        db,
-        AuditAction.enrollment_created,
-        user_id=user.id,
-        target_id=course_id,
-        target_type="course",
-    )
+    admin_svc.enroll_student(db, student_id, course_id, user.id)
     return RedirectResponse(url=f"/admin/courses-list/{course_id}", status_code=303)
 
 
@@ -407,12 +252,7 @@ async def unenroll_student_form(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(admin_only)],
 ):
-    e = db.get(Enrollment, enrollment_id)
-    if not e:
-        raise HTTPException(status_code=404)
-    course_id = e.course_id
-    db.delete(e)
-    db.commit()
+    course_id = admin_svc.unenroll_student(db, enrollment_id)
     return RedirectResponse(url=f"/admin/courses-list/{course_id}", status_code=303)
 
 
@@ -423,10 +263,5 @@ async def assign_user_department(
     user: Annotated[User, Depends(admin_only)],
     department_id: int = Form(...),
 ):
-    target = db.get(User, user_id)
-    department = db.get(Department, department_id)
-    if not target or not department:
-        raise HTTPException(status_code=404)
-    target.department_id = department.id
-    db.commit()
+    admin_svc.assign_department(db, user_id, department_id)
     return RedirectResponse(url="/admin/users-list", status_code=303)

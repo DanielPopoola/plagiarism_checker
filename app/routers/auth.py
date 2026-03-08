@@ -1,13 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from ..auth import create_token, hash_password, verify_password
 from ..database import get_db
-from ..models import AuditAction, Department, Role, User
-from ..services.audit import log as audit
+from ..models import Department
+from ..services import auth as auth_svc
 from ..templates import templates
 
 router = APIRouter(tags=["auth"])
@@ -20,33 +19,27 @@ def login_page(request: Request):
 
 @router.post("/login")
 async def login_submit(
-    db: Annotated[Session, Depends(get_db)],
     request: Request,
+    db: Annotated[Session, Depends(get_db)],
     email: str = Form(...),
     password: str = Form(...),
 ):
     ip = request.client.host if request.client else None
-    user = db.query(User).filter_by(email=email).first()
-
-    if not user or not verify_password(password, user.hashed_pw):
-        audit(db, AuditAction.login, detail={"email": email, "success": False}, ip_address=ip)
+    try:
+        user, token = auth_svc.login(db, email, password, ip)
+    except HTTPException as exc:
         return templates.TemplateResponse(
-            "auth/login.html",
-            {"request": request, "error": "Invalid email or password"},
-            status_code=400,
+            "auth/login.html", {"request": request, "error": str(exc.detail)}, status_code=400
         )
+    response = RedirectResponse(url=auth_svc.redirect_after_login(user.role), status_code=302)
+    from ..config import settings
 
-    audit(db, AuditAction.login, user_id=user.id, detail={"success": True}, ip_address=ip)
-    token = create_token(user.id, user.role)
-    if user.role == Role.student:
-        redirect = "/student/dashboard"
-    elif user.role == Role.admin:
-        redirect = "/admin/"
-    else:
-        redirect = "/dashboard/"
-    response = RedirectResponse(url=redirect, status_code=302)
     response.set_cookie(
-        key="session", value=token, httponly=True, samesite="lax", max_age=_max_age()
+        key="session",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes * 60,
     )
     return response
 
@@ -55,8 +48,7 @@ async def login_submit(
 def register_page(request: Request, db: Annotated[Session, Depends(get_db)]):
     departments = db.query(Department).order_by(Department.name).all()
     return templates.TemplateResponse(
-        "auth/register.html",
-        {"request": request, "error": None, "departments": departments},
+        "auth/register.html", {"request": request, "error": None, "departments": departments}
     )
 
 
@@ -70,50 +62,23 @@ async def register_submit(
     role: str = Form(...),
     department_id: int | None = Form(None),
 ):
-    if db.query(User).filter_by(email=email).first():
+    try:
+        auth_svc.register(db, email, name, password, role, department_id)
+    except Exception as exc:
         return templates.TemplateResponse(
             "auth/register.html",
             {
                 "request": request,
-                "error": "Email already registered",
+                "error": str(exc.detail),
                 "departments": db.query(Department).order_by(Department.name).all(),
             },
             status_code=400,
         )
-    user_role = Role(role) if role in Role._value2member_map_ else Role.student
-    chosen_department = db.get(Department, department_id) if department_id else None
-    if user_role == Role.student and not chosen_department:
-        departments = db.query(Department).order_by(Department.name).all()
-        return templates.TemplateResponse(
-            "auth/register.html",
-            {
-                "request": request,
-                "error": "Students must select a department",
-                "departments": departments,
-            },
-            status_code=400,
-        )
-    user = User(
-        email=email,
-        name=name,
-        role=user_role,
-        department_id=chosen_department.id if chosen_department else None,
-        hashed_pw=hash_password(password),
-    )
-    db.add(user)
-    db.commit()
-    audit(db, AuditAction.user_created, user_id=user.id, target_id=user.id, target_type="user")
     return RedirectResponse(url="/login", status_code=302)
 
 
 @router.get("/logout")
-def logout(request: Request, db: Annotated[Session, Depends(get_db)]):
+def logout():
     response = RedirectResponse(url="/login", status_code=302)
     response.delete_cookie("session")
     return response
-
-
-def _max_age() -> int:
-    from ..config import settings
-
-    return settings.access_token_expire_minutes * 60

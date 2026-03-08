@@ -1,24 +1,18 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from ..auth import lecturer_or_admin
 from ..database import get_db
-from ..models import AuditAction, Exam, ReviewDecision, Role, SimilarityPair, Submission, User
+from ..models import AuditAction, ReviewDecision, User
+from ..repositories import exam as exam_repo
+from ..repositories import pair as pair_repo
+from ..repositories import submission as sub_repo
 from ..schemas import PairOut, ReviewCreate, ReviewOut
 from ..services.audit import log as audit
 
 router = APIRouter(prefix="/reports", tags=["reports"])
-
-
-def _assert_exam_access(exam_id: int, user: User, db: Session) -> Exam:
-    exam = db.get(Exam, exam_id)
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-    if user.role == Role.lecturer and exam.course.department_id != user.department_id:
-        raise HTTPException(status_code=403, detail="Not your department")
-    return exam
 
 
 @router.get("/{exam_id}/pairs", response_model=list[PairOut])
@@ -29,7 +23,8 @@ def get_pairs(
     user: Annotated[User, Depends(lecturer_or_admin)],
     min_score: float = 0.0,
 ):
-    _assert_exam_access(exam_id, user, db)
+    exam = exam_repo.get(db, exam_id)
+    exam_repo.assert_access(exam, user)
     audit(
         db,
         AuditAction.report_viewed,
@@ -38,16 +33,7 @@ def get_pairs(
         target_type="exam",
         ip_address=request.client.host if request.client else None,
     )
-    sub_ids = [s.id for s in db.query(Submission.id).filter_by(exam_id=exam_id)]
-    return (
-        db.query(SimilarityPair)
-        .filter(
-            SimilarityPair.submission_a_id.in_(sub_ids),
-            SimilarityPair.similarity_score >= min_score,
-        )
-        .order_by(SimilarityPair.similarity_score.desc())
-        .all()
-    )
+    return pair_repo.list_by_exam(db, exam_id, min_score)
 
 
 @router.get("/pairs/{pair_id}", response_model=PairOut)
@@ -56,10 +42,7 @@ def get_pair(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(lecturer_or_admin)],
 ):
-    pair = db.get(SimilarityPair, pair_id)
-    if not pair:
-        raise HTTPException(status_code=404, detail="Pair not found")
-    return pair
+    return pair_repo.get(db, pair_id)
 
 
 @router.post("/pairs/{pair_id}/review", response_model=ReviewOut)
@@ -69,21 +52,20 @@ def review_pair(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(lecturer_or_admin)],
 ):
-    pair = db.get(SimilarityPair, pair_id)
-    if not pair:
-        raise HTTPException(status_code=404, detail="Pair not found")
+    from datetime import UTC, datetime
 
-    sub_a = db.get(Submission, pair.submission_a_id)
-    _assert_exam_access(sub_a.exam_id, user, db)
-
+    pair = pair_repo.get(db, pair_id)
+    sub_a = sub_repo.get(db, pair.submission_a_id)
+    exam = exam_repo.get(db, sub_a.exam_id)
+    exam_repo.assert_access(exam, user)
     review = pair.review or ReviewDecision(pair_id=pair_id)
     review.reviewer_id = user.id
     review.status = body.status
     review.notes = body.notes
+    review.decided_at = datetime.now(UTC)
     if not pair.review:
         db.add(review)
     db.commit()
     db.refresh(review)
-
     audit(db, AuditAction.review_decision, user_id=user.id, target_id=pair_id, target_type="pair")
     return review
