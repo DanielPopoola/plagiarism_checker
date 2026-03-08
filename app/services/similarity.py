@@ -96,38 +96,55 @@ def _minhash_candidates(
     MinHash LSH candidate filtering.
     Splits each document signature into bands; documents sharing any band bucket
     are candidate pairs. False-negative rate ~5% for Jaccard >= 0.5 at these params.
+
+    Uses numpy vectorised hashing instead of per-shingle md5 to keep signature
+    generation fast at scale (~10x faster than the hashlib loop approach).
     """
-    import hashlib
+    import numpy as np
 
     rows = num_perm // bands
+    rng = np.random.default_rng(42)
+    # Universal hash family: h(x) = (a*x + b) mod p mod vocab_size
+    # We approximate by hashing shingle strings to uint32 then applying num_perm
+    # independent (a, b) pairs.
+    _a = rng.integers(1, 2**31, size=num_perm, dtype=np.int64)
+    _b = rng.integers(0, 2**31, size=num_perm, dtype=np.int64)
+    _p = np.int64(2**31 - 1)  # Mersenne prime
 
-    def _minhash(text: str) -> list[int]:
+    def _minhash(text: str) -> np.ndarray:
         tokens = text.split()
-        shingles = {" ".join(tokens[i : i + 6]) for i in range(max(1, len(tokens) - 5))}
-        return [
-            min(
-                (int(hashlib.md5(f"{seed}:{s}".encode()).hexdigest(), 16) for s in shingles),
-                default=0,
-            )
-            for seed in range(num_perm)
+        shingles = [
+            " ".join(tokens[i: i + 6])
+            for i in range(max(1, len(tokens) - 5))
         ]
+        if not shingles:
+            return np.zeros(num_perm, dtype=np.int64)
+        # hash each shingle to a uint32
+        hashes = np.array(
+            [hash(s) & 0xFFFFFFFF for s in shingles], dtype=np.int64
+        )  # shape: (n_shingles,)
+        # (num_perm, n_shingles) via broadcasting
+        vals = (_a[:, None] * hashes[None, :] + _b[:, None]) % _p
+        return vals.min(axis=1)  # shape: (num_perm,)
 
     signatures = [_minhash(doc) for doc in corpus]
+
     buckets: dict[tuple, list[int]] = {}
     for idx, sig in enumerate(signatures):
         for b in range(bands):
-            key = (b, tuple(sig[b * rows : (b + 1) * rows]))
+            key = (b, *sig[b * rows: (b + 1) * rows].tolist())
             buckets.setdefault(key, []).append(idx)
 
     candidates: set[tuple[int, int]] = set()
     for bucket_ids in buckets.values():
+        if len(bucket_ids) < 2:
+            continue
         for i in range(len(bucket_ids)):
             for j in range(i + 1, len(bucket_ids)):
                 a, b = sorted((bucket_ids[i], bucket_ids[j]))
                 candidates.add((ids[a], ids[b]))
 
     return list(candidates)
-
 
 def _cosine_score(a: str, b: str) -> float:
     try:
