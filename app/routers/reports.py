@@ -31,8 +31,11 @@ def get_pairs(
 ):
     _assert_exam_access(exam_id, user, db)
     audit(
-        db, AuditAction.report_viewed, user_id=user.id,
-        target_id=exam_id, target_type="exam",
+        db,
+        AuditAction.report_viewed,
+        user_id=user.id,
+        target_id=exam_id,
+        target_type="exam",
         ip_address=request.client.host if request.client else None,
     )
     sub_ids = [s.id for s in db.query(Submission.id).filter_by(exam_id=exam_id)]

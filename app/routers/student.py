@@ -3,7 +3,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from ..templates import templates
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,6 +19,7 @@ from ..models import (
     User,
 )
 from ..services.audit import log as audit
+from ..templates import templates
 
 router = APIRouter(prefix="/student", tags=["student"])
 
@@ -30,6 +30,7 @@ def _require_student(user: User) -> None:
 
 
 # --- Dashboard ---
+
 
 @router.get("/dashboard", response_class=HTMLResponse)
 def student_dashboard(
@@ -49,7 +50,8 @@ def student_dashboard(
             Exam.closes_at >= now,
         )
         .all()
-        if enrolled_ids else []
+        if enrolled_ids
+        else []
     )
     submission_count = db.query(Submission).filter_by(student_id=user.id).count()
 
@@ -67,6 +69,7 @@ def student_dashboard(
 
 # --- Courses ---
 
+
 @router.get("/courses", response_class=HTMLResponse)
 def browse_courses(
     request: Request,
@@ -76,10 +79,7 @@ def browse_courses(
     _require_student(user)
     enrolled_ids = {e.course_id for e in db.query(Enrollment).filter_by(student_id=user.id).all()}
     courses = (
-        db.query(Course)
-        .filter_by(department_id=user.department_id)
-        .order_by(Course.code)
-        .all()
+        db.query(Course).filter_by(department_id=user.department_id).order_by(Course.code).all()
     )
     return templates.TemplateResponse(
         "student/courses.html",
@@ -102,7 +102,13 @@ def enroll(
     db.add(Enrollment(student_id=user.id, course_id=course_id))
     try:
         db.commit()
-        audit(db, AuditAction.enrollment_created, user_id=user.id, target_id=course_id, target_type="course")
+        audit(
+            db,
+            AuditAction.enrollment_created,
+            user_id=user.id,
+            target_id=course_id,
+            target_type="course",
+        )
     except IntegrityError:
         db.rollback()
     return RedirectResponse(url="/student/courses", status_code=303)
@@ -139,21 +145,25 @@ def course_detail(
     enrolled = db.query(Enrollment).filter_by(student_id=user.id, course_id=course_id).first()
 
     exams = (
-        db.query(Exam)
-        .filter_by(course_id=course_id)
-        .order_by(Exam.opens_at.desc())
-        .all()
-        if enrolled else []
+        db.query(Exam).filter_by(course_id=course_id).order_by(Exam.opens_at.desc()).all()
+        if enrolled
+        else []
     )
 
     # For each exam, check if this student already submitted
-    submitted_exam_ids = {
-        s.exam_id
-        for s in db.query(Submission).filter(
-            Submission.student_id == user.id,
-            Submission.exam_id.in_([e.id for e in exams]),
-        ).all()
-    } if exams else set()
+    submitted_exam_ids = (
+        {
+            s.exam_id
+            for s in db.query(Submission)
+            .filter(
+                Submission.student_id == user.id,
+                Submission.exam_id.in_([e.id for e in exams]),
+            )
+            .all()
+        }
+        if exams
+        else set()
+    )
 
     return templates.TemplateResponse(
         "student/course.html",
@@ -170,6 +180,7 @@ def course_detail(
 
 
 # --- Submit ---
+
 
 @router.get("/exams/{exam_id}/submit", response_class=HTMLResponse)
 def submit_form(
@@ -210,8 +221,13 @@ async def submit_file(
         exam = db.get(Exam, exam_id)
         return templates.TemplateResponse(
             "student/submit.html",
-            {"request": request, "user": user, "exam": exam,
-             "error": "You have already submitted for this exam.", "existing": True},
+            {
+                "request": request,
+                "user": user,
+                "exam": exam,
+                "error": "You have already submitted for this exam.",
+                "existing": True,
+            },
             status_code=400,
         )
 
@@ -221,7 +237,13 @@ async def submit_file(
         exam = db.get(Exam, exam_id)
         return templates.TemplateResponse(
             "student/submit.html",
-            {"request": request, "user": user, "exam": exam, "error": "No file selected.", "existing": None},
+            {
+                "request": request,
+                "user": user,
+                "exam": exam,
+                "error": "No file selected.",
+                "existing": None,
+            },
             status_code=400,
         )
 
@@ -236,14 +258,18 @@ async def submit_file(
         )
 
     audit(
-        db, AuditAction.submission_upload, user_id=user.id,
-        target_id=exam_id, target_type="exam",
+        db,
+        AuditAction.submission_upload,
+        user_id=user.id,
+        target_id=exam_id,
+        target_type="exam",
         ip_address=request.client.host if request.client else None,
     )
     return RedirectResponse(url="/student/dashboard", status_code=303)
 
 
 # --- Submissions ---
+
 
 @router.get("/submissions", response_class=HTMLResponse)
 def submission_list(
@@ -285,7 +311,13 @@ def submission_detail(
         .order_by(SimilarityPair.similarity_score.desc())
         .all()
     )
-    audit(db, AuditAction.report_viewed, user_id=user.id, target_id=submission_id, target_type="submission")
+    audit(
+        db,
+        AuditAction.report_viewed,
+        user_id=user.id,
+        target_id=submission_id,
+        target_type="submission",
+    )
     return templates.TemplateResponse(
         "student/submission.html",
         {"request": request, "user": user, "sub": sub, "exam": sub.exam, "pairs": pairs},

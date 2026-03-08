@@ -2,13 +2,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from ..templates import templates
 from sqlalchemy.orm import Session
 
 from ..auth import create_token, hash_password, verify_password
 from ..database import get_db
 from ..models import AuditAction, Department, Role, User
 from ..services.audit import log as audit
+from ..templates import templates
 
 router = APIRouter(tags=["auth"])
 

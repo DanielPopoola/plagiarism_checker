@@ -113,10 +113,7 @@ def _minhash_candidates(
 
     def _minhash(text: str) -> np.ndarray:
         tokens = text.split()
-        shingles = [
-            " ".join(tokens[i: i + 6])
-            for i in range(max(1, len(tokens) - 5))
-        ]
+        shingles = [" ".join(tokens[i : i + 6]) for i in range(max(1, len(tokens) - 5))]
         if not shingles:
             return np.zeros(num_perm, dtype=np.int64)
         # hash each shingle to a uint32
@@ -132,7 +129,7 @@ def _minhash_candidates(
     buckets: dict[tuple, list[int]] = {}
     for idx, sig in enumerate(signatures):
         for b in range(bands):
-            key = (b, *sig[b * rows: (b + 1) * rows].tolist())
+            key = (b, *sig[b * rows : (b + 1) * rows].tolist())
             buckets.setdefault(key, []).append(idx)
 
     candidates: set[tuple[int, int]] = set()
@@ -145,6 +142,7 @@ def _minhash_candidates(
                 candidates.add((ids[a], ids[b]))
 
     return list(candidates)
+
 
 def _cosine_score(a: str, b: str) -> float:
     try:

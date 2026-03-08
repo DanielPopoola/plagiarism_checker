@@ -2,7 +2,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from ..templates import templates
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,12 +18,13 @@ from ..models import (
 )
 from ..schemas import DepartmentOut, UserOut
 from ..services.audit import log as audit
+from ..templates import templates
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-
 # ── JSON API ──────────────────────────────────────────────────────────────────
+
 
 @router.get("/users", response_model=list[UserOut])
 def list_users(
@@ -48,7 +48,9 @@ def deactivate_user(
         raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
     target.is_active = False
     db.commit()
-    audit(db, AuditAction.user_deactivated, user_id=admin.id, target_id=target.id, target_type="user")
+    audit(
+        db, AuditAction.user_deactivated, user_id=admin.id, target_id=target.id, target_type="user"
+    )
     db.refresh(target)
     return target
 
@@ -83,7 +85,7 @@ def change_role(
     try:
         target.role = Role(role)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
+        raise HTTPException(status_code=400, detail=f"Invalid role: {role}") from ValueError
     db.commit()
     db.refresh(target)
     return target
@@ -121,7 +123,9 @@ def create_department_api(
         db.rollback()
         dept = db.query(Department).filter_by(code=code.strip().upper()).first()
         if not dept:
-            raise HTTPException(status_code=409, detail="Department already exists")
+            raise HTTPException(
+                status_code=409, detail="Department already exists"
+            ) from IntegrityError
     db.refresh(dept)
     return dept
 
@@ -144,8 +148,14 @@ def enroll_student(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Already enrolled")
-    audit(db, AuditAction.enrollment_created, user_id=admin.id, target_id=course_id, target_type="course")
+        raise HTTPException(status_code=409, detail="Already enrolled") from IntegrityError
+    audit(
+        db,
+        AuditAction.enrollment_created,
+        user_id=admin.id,
+        target_id=course_id,
+        target_type="course",
+    )
     db.refresh(enrollment)
     return enrollment
 
@@ -165,6 +175,7 @@ def unenroll_student(
 
 # ── HTML Pages ────────────────────────────────────────────────────────────────
 
+
 @router.get("/", response_class=HTMLResponse)
 def admin_index(
     request: Request,
@@ -176,12 +187,18 @@ def admin_index(
     total_departments = db.query(Department).count()
     total_enrollments = db.query(Enrollment).count()
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(20).all()
-    return templates.TemplateResponse("admin/index.html", {
-        "request": request, "user": user,
-        "total_users": total_users, "total_courses": total_courses,
-        "total_departments": total_departments, "total_submissions": total_enrollments,
-        "logs": logs,
-    })
+    return templates.TemplateResponse(
+        "admin/index.html",
+        {
+            "request": request,
+            "user": user,
+            "total_users": total_users,
+            "total_courses": total_courses,
+            "total_departments": total_departments,
+            "total_submissions": total_enrollments,
+            "logs": logs,
+        },
+    )
 
 
 @router.get("/users-list", response_class=HTMLResponse)
@@ -192,10 +209,15 @@ def admin_users(
 ):
     users = db.query(User).order_by(User.created_at.desc()).all()
     departments = db.query(Department).order_by(Department.name).all()
-    return templates.TemplateResponse("admin/users.html", {
-        "request": request, "user": user,
-        "users": users, "departments": departments,
-    })
+    return templates.TemplateResponse(
+        "admin/users.html",
+        {
+            "request": request,
+            "user": user,
+            "users": users,
+            "departments": departments,
+        },
+    )
 
 
 @router.get("/departments-list", response_class=HTMLResponse)
@@ -205,9 +227,14 @@ def admin_departments(
     user: Annotated[User, Depends(admin_only)],
 ):
     departments = db.query(Department).order_by(Department.name).all()
-    return templates.TemplateResponse("admin/departments.html", {
-        "request": request, "user": user, "departments": departments,
-    })
+    return templates.TemplateResponse(
+        "admin/departments.html",
+        {
+            "request": request,
+            "user": user,
+            "departments": departments,
+        },
+    )
 
 
 @router.get("/departments-list/{dept_id}", response_class=HTMLResponse)
@@ -221,11 +248,19 @@ def admin_department_detail(
     if not dept:
         raise HTTPException(status_code=404, detail="Department not found")
     courses = db.query(Course).filter_by(department_id=dept_id).order_by(Course.code).all()
-    lecturers = db.query(User).filter(User.role.in_([Role.lecturer, Role.admin])).order_by(User.name).all()
-    return templates.TemplateResponse("admin/department.html", {
-        "request": request, "user": user,
-        "dept": dept, "courses": courses, "lecturers": lecturers,
-    })
+    lecturers = (
+        db.query(User).filter(User.role.in_([Role.lecturer, Role.admin])).order_by(User.name).all()
+    )
+    return templates.TemplateResponse(
+        "admin/department.html",
+        {
+            "request": request,
+            "user": user,
+            "dept": dept,
+            "courses": courses,
+            "lecturers": lecturers,
+        },
+    )
 
 
 @router.get("/courses-list/{course_id}", response_class=HTMLResponse)
@@ -238,17 +273,26 @@ def admin_course_detail(
     course = db.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    lecturers = db.query(User).filter(User.role.in_([Role.lecturer, Role.admin])).order_by(User.name).all()
+    lecturers = (
+        db.query(User).filter(User.role.in_([Role.lecturer, Role.admin])).order_by(User.name).all()
+    )
     students = db.query(User).filter_by(role=Role.student).order_by(User.name).all()
     enrolled_ids = {e.student_id for e in course.enrollments}
-    return templates.TemplateResponse("admin/course.html", {
-        "request": request, "user": user,
-        "course": course, "lecturers": lecturers,
-        "students": students, "enrolled_ids": enrolled_ids,
-    })
+    return templates.TemplateResponse(
+        "admin/course.html",
+        {
+            "request": request,
+            "user": user,
+            "course": course,
+            "lecturers": lecturers,
+            "students": students,
+            "enrolled_ids": enrolled_ids,
+        },
+    )
 
 
 # ── HTML Form POSTs ───────────────────────────────────────────────────────────
+
 
 @router.post("/departments/new", response_class=HTMLResponse)
 async def create_department(
@@ -281,14 +325,17 @@ async def create_course(
     if not lecturer or lecturer.role not in (Role.lecturer, Role.admin):
         raise HTTPException(status_code=400, detail="Selected user is not a lecturer")
     course = Course(
-        title=title, code=code,
+        title=title,
+        code=code,
         description=description or None,
         department_id=dept_id,
         lecturer_id=lecturer_id,
     )
     db.add(course)
     db.commit()
-    audit(db, AuditAction.course_created, user_id=user.id, target_id=course.id, target_type="course")
+    audit(
+        db, AuditAction.course_created, user_id=user.id, target_id=course.id, target_type="course"
+    )
     return RedirectResponse(url=f"/admin/departments-list/{dept_id}", status_code=303)
 
 
@@ -344,7 +391,13 @@ async def enroll_student_form(
         db.commit()
     except IntegrityError:
         db.rollback()
-    audit(db, AuditAction.enrollment_created, user_id=user.id, target_id=course_id, target_type="course")
+    audit(
+        db,
+        AuditAction.enrollment_created,
+        user_id=user.id,
+        target_id=course_id,
+        target_type="course",
+    )
     return RedirectResponse(url=f"/admin/courses-list/{course_id}", status_code=303)
 
 

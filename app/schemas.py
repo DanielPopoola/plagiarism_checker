@@ -4,8 +4,8 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 from .models import AuditAction, JobStatus, PlagiarismType, ReviewStatus, Role
 
-
 # --- Auth ---
+
 
 class TokenOut(BaseModel):
     access_token: str
@@ -46,6 +46,7 @@ class DepartmentOut(BaseModel):
 
 # --- Course ---
 
+
 class CourseCreate(BaseModel):
     title: str
     code: str
@@ -67,6 +68,7 @@ class CourseOut(BaseModel):
 
 # --- Enrollment ---
 
+
 class EnrollmentOut(BaseModel):
     id: int
     student_id: int
@@ -76,6 +78,7 @@ class EnrollmentOut(BaseModel):
 
 
 # --- Exam ---
+
 
 class ExamCreate(BaseModel):
     course_id: int
@@ -110,6 +113,7 @@ class ExamOut(BaseModel):
 
 # --- Submission ---
 
+
 class SubmissionOut(BaseModel):
     id: int
     exam_id: int
@@ -120,6 +124,7 @@ class SubmissionOut(BaseModel):
 
 
 # --- Job ---
+
 
 class JobOut(BaseModel):
     id: int
@@ -132,6 +137,7 @@ class JobOut(BaseModel):
 
 
 # --- Similarity / Reports ---
+
 
 class FragmentOut(BaseModel):
     id: int
@@ -168,6 +174,7 @@ class PairOut(BaseModel):
 
 # --- Review ---
 
+
 class ReviewCreate(BaseModel):
     status: ReviewStatus
     notes: str | None = None
@@ -184,6 +191,7 @@ class ReviewOut(BaseModel):
 
 
 # --- Audit ---
+
 
 class AuditLogOut(BaseModel):
     id: int

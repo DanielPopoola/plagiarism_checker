@@ -4,7 +4,6 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from ..templates import templates
 from sqlalchemy.orm import Session
 
 from ..auth import lecturer_or_admin
@@ -22,12 +21,12 @@ from ..models import (
     User,
 )
 from ..services.audit import log as audit
+from ..templates import templates
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 lagos = ZoneInfo("Africa/Lagos")
 utc = ZoneInfo("UTC")
-
 
 
 def _dept_courses(user: User, db: Session) -> list[Course]:
@@ -60,6 +59,7 @@ def _highlight(text: str, spans: list[tuple[int, int]]) -> list[dict]:
 
 # --- Home ---
 
+
 @router.get("/", response_class=HTMLResponse)
 def dashboard_home(
     request: Request,
@@ -74,6 +74,7 @@ def dashboard_home(
 
 
 # --- Course detail ---
+
 
 @router.get("/courses/{course_id}", response_class=HTMLResponse)
 def course_detail(
@@ -95,6 +96,7 @@ def course_detail(
 
 # --- Exam creation ---
 
+
 @router.get("/exams/new", response_class=HTMLResponse)
 def new_exam_form(
     request: Request,
@@ -105,7 +107,13 @@ def new_exam_form(
     courses = _dept_courses(user, db)
     return templates.TemplateResponse(
         "dashboard/exam_new.html",
-        {"request": request, "user": user, "courses": courses, "error": None, "preselect_course": course_id},
+        {
+            "request": request,
+            "user": user,
+            "courses": courses,
+            "error": None,
+            "preselect_course": course_id,
+        },
     )
 
 
@@ -128,7 +136,13 @@ async def create_exam(
     def _err(msg: str):
         return templates.TemplateResponse(
             "dashboard/exam_new.html",
-            {"request": request, "user": user, "courses": courses, "error": msg, "preselect_course": course_id},
+            {
+                "request": request,
+                "user": user,
+                "courses": courses,
+                "error": msg,
+                "preselect_course": course_id,
+            },
             status_code=400,
         )
 
@@ -139,8 +153,18 @@ async def create_exam(
         return _err("You don't have access to that course.")
 
     try:
-        opens = datetime.fromisoformat(opens_at).replace(tzinfo=lagos).astimezone(utc).replace(tzinfo=None)
-        closes = datetime.fromisoformat(closes_at).replace(tzinfo=lagos).astimezone(utc).replace(tzinfo=None)
+        opens = (
+            datetime.fromisoformat(opens_at)
+            .replace(tzinfo=lagos)
+            .astimezone(utc)
+            .replace(tzinfo=None)
+        )
+        closes = (
+            datetime.fromisoformat(closes_at)
+            .replace(tzinfo=lagos)
+            .astimezone(utc)
+            .replace(tzinfo=None)
+        )
     except ValueError:
         return _err("Invalid date format.")
 
@@ -165,6 +189,7 @@ async def create_exam(
 
 # --- Exam detail ---
 
+
 @router.get("/exams/{exam_id}", response_class=HTMLResponse)
 def exam_detail(
     exam_id: int,
@@ -179,13 +204,21 @@ def exam_detail(
     _assert_exam_access(exam, user)
 
     audit(
-        db, AuditAction.report_viewed, user_id=user.id,
-        target_id=exam_id, target_type="exam",
+        db,
+        AuditAction.report_viewed,
+        user_id=user.id,
+        target_id=exam_id,
+        target_type="exam",
         ip_address=request.client.host if request.client else None,
     )
 
     job = db.query(PlagiarismJob).filter_by(exam_id=exam_id).first()
-    submissions = db.query(Submission).filter_by(exam_id=exam_id).order_by(Submission.uploaded_at.desc()).all()
+    submissions = (
+        db.query(Submission)
+        .filter_by(exam_id=exam_id)
+        .order_by(Submission.uploaded_at.desc())
+        .all()
+    )
     sub_ids = [s.id for s in submissions]
     pairs = (
         db.query(SimilarityPair)
@@ -195,20 +228,27 @@ def exam_detail(
         )
         .order_by(SimilarityPair.similarity_score.desc())
         .all()
-        if sub_ids else []
+        if sub_ids
+        else []
     )
 
     return templates.TemplateResponse(
         "dashboard/exam.html",
         {
-            "request": request, "user": user, "exam": exam,
-            "job": job, "submissions": submissions, "pairs": pairs,
-            "min_score": min_score, "now": datetime.now(UTC).replace(tzinfo=None),
+            "request": request,
+            "user": user,
+            "exam": exam,
+            "job": job,
+            "submissions": submissions,
+            "pairs": pairs,
+            "min_score": min_score,
+            "now": datetime.now(UTC).replace(tzinfo=None),
         },
     )
 
 
 # --- Pair detail ---
+
 
 @router.get("/pairs/{pair_id}", response_class=HTMLResponse)
 def pair_detail(
@@ -228,20 +268,29 @@ def pair_detail(
 
     _assert_exam_access(sub_a.exam, user)
 
-    highlights_a = _highlight(sub_a.extracted_text or "", [(f.start_a, f.end_a) for f in pair.fragments])
-    highlights_b = _highlight(sub_b.extracted_text or "", [(f.start_b, f.end_b) for f in pair.fragments])
+    highlights_a = _highlight(
+        sub_a.extracted_text or "", [(f.start_a, f.end_a) for f in pair.fragments]
+    )
+    highlights_b = _highlight(
+        sub_b.extracted_text or "", [(f.start_b, f.end_b) for f in pair.fragments]
+    )
 
     return templates.TemplateResponse(
         "dashboard/pair.html",
         {
-            "request": request, "user": user, "pair": pair,
-            "sub_a": sub_a, "sub_b": sub_b,
-            "highlights_a": highlights_a, "highlights_b": highlights_b,
+            "request": request,
+            "user": user,
+            "pair": pair,
+            "sub_a": sub_a,
+            "sub_b": sub_b,
+            "highlights_a": highlights_a,
+            "highlights_b": highlights_b,
         },
     )
 
 
 # --- Pair review ---
+
 
 @router.post("/pairs/{pair_id}/review", response_class=HTMLResponse)
 def review_pair(
@@ -262,7 +311,7 @@ def review_pair(
     try:
         review_status = ReviewStatus(status)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid review status")
+        raise HTTPException(status_code=400, detail="Invalid review status") from ValueError
 
     review = pair.review or ReviewDecision(pair_id=pair_id)
     review.reviewer_id = user.id

@@ -31,7 +31,9 @@ def create_course(
     db.add(course)
     db.commit()
     db.refresh(course)
-    audit(db, AuditAction.course_created, user_id=user.id, target_id=course.id, target_type="course")
+    audit(
+        db, AuditAction.course_created, user_id=user.id, target_id=course.id, target_type="course"
+    )
     return course
 
 
