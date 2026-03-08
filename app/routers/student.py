@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from ..templates import templates
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,7 +22,6 @@ from ..models import (
 from ..services.audit import log as audit
 
 router = APIRouter(prefix="/student", tags=["student"])
-templates = Jinja2Templates(directory="templates")
 
 
 def _require_student(user: User) -> None:
@@ -121,6 +120,53 @@ def unenroll(
         db.delete(e)
         db.commit()
     return RedirectResponse(url="/student/courses", status_code=303)
+
+
+@router.get("/courses/{course_id}", response_class=HTMLResponse)
+def course_detail(
+    course_id: int,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    _require_student(user)
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    course = db.get(Course, course_id)
+    if not course or course.department_id != user.department_id:
+        raise HTTPException(status_code=404)
+
+    enrolled = db.query(Enrollment).filter_by(student_id=user.id, course_id=course_id).first()
+
+    exams = (
+        db.query(Exam)
+        .filter_by(course_id=course_id)
+        .order_by(Exam.opens_at.desc())
+        .all()
+        if enrolled else []
+    )
+
+    # For each exam, check if this student already submitted
+    submitted_exam_ids = {
+        s.exam_id
+        for s in db.query(Submission).filter(
+            Submission.student_id == user.id,
+            Submission.exam_id.in_([e.id for e in exams]),
+        ).all()
+    } if exams else set()
+
+    return templates.TemplateResponse(
+        "student/course.html",
+        {
+            "request": request,
+            "user": user,
+            "course": course,
+            "enrolled": enrolled,
+            "exams": exams,
+            "submitted_exam_ids": submitted_exam_ids,
+            "now": now,
+        },
+    )
 
 
 # --- Submit ---

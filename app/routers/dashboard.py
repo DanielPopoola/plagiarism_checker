@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from ..templates import templates
 from sqlalchemy.orm import Session
 
 from ..auth import lecturer_or_admin
@@ -23,7 +24,10 @@ from ..models import (
 from ..services.audit import log as audit
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-templates = Jinja2Templates(directory="templates")
+
+lagos = ZoneInfo("Africa/Lagos")
+utc = ZoneInfo("UTC")
+
 
 
 def _dept_courses(user: User, db: Session) -> list[Course]:
@@ -135,8 +139,8 @@ async def create_exam(
         return _err("You don't have access to that course.")
 
     try:
-        opens = datetime.fromisoformat(opens_at)
-        closes = datetime.fromisoformat(closes_at)
+        opens = datetime.fromisoformat(opens_at).replace(tzinfo=lagos).astimezone(utc).replace(tzinfo=None)
+        closes = datetime.fromisoformat(closes_at).replace(tzinfo=lagos).astimezone(utc).replace(tzinfo=None)
     except ValueError:
         return _err("Invalid date format.")
 

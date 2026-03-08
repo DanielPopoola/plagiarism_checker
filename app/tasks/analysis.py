@@ -1,9 +1,18 @@
 from datetime import UTC, datetime
 
 from celery import Celery
+from ..config import settings
 
 celery_app = Celery("plagiarism")
-celery_app.config_from_object("celeryconfig")
+celery_app.conf.update(
+    broker_url=settings.redis_url,
+    result_backend=settings.redis_url,
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="Africa/Lagos",
+    enable_utc=True,
+)
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from ..templates import templates
 from sqlalchemy.orm import Session
 
 from ..auth import create_token, hash_password, verify_password
@@ -11,7 +11,6 @@ from ..models import AuditAction, Department, Role, User
 from ..services.audit import log as audit
 
 router = APIRouter(tags=["auth"])
-templates = Jinja2Templates(directory="templates")
 
 
 @router.get("/login", response_class=HTMLResponse)
