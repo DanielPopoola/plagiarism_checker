@@ -1,12 +1,17 @@
-"""Create 300-level placeholder departments/courses via API.
+"""Seed departments and courses via the API.
+
+Each department gets its own set of courses. Shared course codes (e.g. GNS 302)
+are created once per department they appear in — they are no longer deduplicated
+across departments, since a course now belongs to exactly one department.
 
 Usage:
-python scripts/seed_departments_courses.py --base-url http://localhost:8000 --email admin@test.com --password password123
+    python scripts/seed_departments_courses.py \
+        --base-url http://localhost:8000 \
+        --email admin@test.com \
+        --password password123
 """
 
 import argparse
-from collections import defaultdict
-
 import requests
 
 SHARED_SOCIAL = [
@@ -15,9 +20,8 @@ SHARED_SOCIAL = [
     ("GNS 322", "INTERNATIONAL BUSINESS"),
 ]
 
-CURRICULUM = {
-    "INTERNATIONAL RELATIONS": SHARED_SOCIAL
-    + [
+CURRICULUM: dict[str, list[tuple[str, str]]] = {
+    "INTERNATIONAL RELATIONS": SHARED_SOCIAL + [
         ("POL 331", "THE GREAT CHINESE ECONOMY"),
         ("POL 301", "WORLD POLITICS"),
         ("INR 311", "INTERNATIONAL FINANCE AND POLITICS OF FOREIGN AIDS"),
@@ -25,8 +29,7 @@ CURRICULUM = {
         ("INR 331", "ELEMENTS OF CONTEMPORARY GLOBAL ISSUES"),
         ("INR 301", "GLOBAL TERRORISM AND POLITICAL VIOLENCE"),
     ],
-    "POLITICAL SCIENCE": SHARED_SOCIAL
-    + [
+    "POLITICAL SCIENCE": SHARED_SOCIAL + [
         ("POL 331", "THE GREAT CHINESE ECONOMY"),
         ("POL 301", "WORLD POLITICS"),
         ("INR 311", "INTERNATIONAL FINANCE AND POLITICS OF FOREIGN AIDS"),
@@ -34,8 +37,7 @@ CURRICULUM = {
         ("INR 331", "ELEMENTS OF CONTEMPORARY GLOBAL ISSUES"),
         ("INR 301", "GLOBAL TERRORISM AND POLITICAL VIOLENCE"),
     ],
-    "PUBLIC ADMINISTRATION": SHARED_SOCIAL
-    + [
+    "PUBLIC ADMINISTRATION": SHARED_SOCIAL + [
         ("POL 331", "THE GREAT CHINESE ECONOMY"),
         ("POL 301", "WORLD POLITICS"),
         ("INR 311", "INTERNATIONAL FINANCE AND POLITICS OF FOREIGN AIDS"),
@@ -43,8 +45,7 @@ CURRICULUM = {
         ("INR 331", "ELEMENTS OF CONTEMPORARY GLOBAL ISSUES"),
         ("INR 301", "GLOBAL TERRORISM AND POLITICAL VIOLENCE"),
     ],
-    "BUSINESS ADMINISTRATION": SHARED_SOCIAL
-    + [
+    "BUSINESS ADMINISTRATION": SHARED_SOCIAL + [
         ("BUS 304", "BUSINESS PORT FOLIO MANAGEMENT"),
         ("ECN 312", "MANAGERIAL ECONOMICS"),
         ("BUS 322", "BUSINESS ETHICS AND SOCIAL RESPONSIBILITIES"),
@@ -55,7 +56,7 @@ CURRICULUM = {
 }
 
 
-def code_for_department(name: str) -> str:
+def dept_code(name: str) -> str:
     return "".join(p[0] for p in name.split()).upper()[:6]
 
 
@@ -67,44 +68,42 @@ def main():
     args = ap.parse_args()
 
     s = requests.Session()
-    token = s.post(
+    s.headers["Authorization"] = "Bearer " + s.post(
         f"{args.base_url}/auth/token",
         data={"username": args.email, "password": args.password},
     ).json()["access_token"]
-    s.headers.update({"Authorization": f"Bearer {token}"})
 
+    # Pick any lecturer/admin to assign as default course lecturer
     users = s.get(f"{args.base_url}/admin/users").json()
     lecturer_id = next(u["id"] for u in users if u["role"] in ("lecturer", "admin"))
 
-    departments = {}
-    for department in CURRICULUM:
-        payload = {"name": department, "code": code_for_department(department)}
-        res = s.post(f"{args.base_url}/admin/departments", params=payload)
+    total_courses = 0
+
+    for dept_name, courses in CURRICULUM.items():
+        # Create department
+        res = s.post(
+            f"{args.base_url}/admin/departments",
+            params={"name": dept_name, "code": dept_code(dept_name)},
+        )
         res.raise_for_status()
-        departments[department] = res.json()["id"]
+        dept_id = res.json()["id"]
 
-    course_departments = defaultdict(set)
-    course_titles = {}
-    for department, courses in CURRICULUM.items():
+        # Create every course directly under this department
         for code, title in courses:
-            course_departments[code].add(departments[department])
-            course_titles[code] = title
+            res = s.post(
+                f"{args.base_url}/courses/",
+                json={
+                    "code": code,
+                    "title": title,
+                    "description": "Placeholder created from timetable",
+                    "department_id": dept_id,
+                    "lecturer_id": lecturer_id,
+                },
+            )
+            res.raise_for_status()
+            total_courses += 1
 
-    existing = {c["code"]: c for c in s.get(f"{args.base_url}/courses/").json()}
-    for code, department_ids in course_departments.items():
-        payload = {
-            "code": code,
-            "title": course_titles[code],
-            "description": "Placeholder created from PDF timetable",
-            "lecturer_id": lecturer_id,
-            "department_ids": sorted(department_ids),
-        }
-        if code in existing:
-            s.put(f"{args.base_url}/courses/{existing[code]['id']}", json=payload).raise_for_status()
-        else:
-            s.post(f"{args.base_url}/courses/", json=payload).raise_for_status()
-
-    print(f"Seeded {len(departments)} departments and {len(course_departments)} courses")
+    print(f"Seeded {len(CURRICULUM)} departments and {total_courses} courses")
 
 
 if __name__ == "__main__":

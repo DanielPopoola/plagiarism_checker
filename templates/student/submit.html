@@ -20,11 +20,11 @@
     <dl class="grid grid-cols-2 gap-4 text-sm mb-6">
       <div>
         <dt class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Opens</dt>
-        <dd class="font-semibold text-slate-700">{{ exam.opens_at.strftime("%d %b %Y %H:%M") }}</dd>
+        <dd class="font-semibold text-slate-700">{{ exam.opens_at | lagos("%d %b %Y") }}</dd>
       </div>
       <div>
         <dt class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Closes</dt>
-        <dd class="font-semibold text-slate-700">{{ exam.closes_at.strftime("%d %b %Y %H:%M") }}</dd>
+        <dd class="font-semibold text-slate-700">{{ exam.closes_at | lagos("%d %b %Y") }}</dd>
       </div>
       <div>
         <dt class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Allowed formats</dt>
