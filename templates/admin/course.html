@@ -9,12 +9,11 @@
     <span class="material-symbols-outlined" style="font-size:14px">chevron_right</span>
     <a href="/admin/departments-list" class="hover:text-primary transition-colors">Departments</a>
     <span class="material-symbols-outlined" style="font-size:14px">chevron_right</span>
-    {% for link in course.department_links %}
-    <a href="/admin/departments-list/{{ link.department_id }}" class="hover:text-primary transition-colors">
-      {{ link.department.name }}
+    {% if course.department %}
+    <a href="/admin/departments-list/{{ course.department.id }}" class="hover:text-primary transition-colors">
+      {{ course.department.name }}
     </a>
-    {% if not loop.last %}<span class="text-slate-300">/</span>{% endif %}
-    {% endfor %}
+    {% endif %}
     <span class="material-symbols-outlined" style="font-size:14px">chevron_right</span>
     <span class="text-slate-700">{{ course.code }}</span>
   </nav>
@@ -217,7 +216,11 @@
         <div class="bg-white rounded-xl border border-slate-200 px-4 py-3 flex justify-between items-center">
           <span class="text-xs font-semibold text-slate-500">Total submissions</span>
           <span class="text-sm font-bold text-slate-800">
-            {{ course.exams | sum(attribute='submissions') | list | length }}
+            {% set total = namespace(count=0) %}
+            {% for exam in course.exams %}
+              {% set total.count = total.count + exam.submissions | length %}
+            {% endfor %}
+            {{ total.count }}
           </span>
         </div>
       </div>
