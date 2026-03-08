@@ -3,9 +3,9 @@ tests/test_api.py — API-level tests using FastAPI TestClient + real SQLite.
 
 Patches:
   - app.tasks.analysis.run_plagiarism_analysis  (Celery task)
-  - app.routers.submissions.extract_text        (avoids real file I/O)
-  - app.routers.submissions._save_file          (avoids disk writes)
-  - app.routers.submissions.encrypt_file        (avoids disk reads on mocked paths)
+  - app.services.submission.extract_text        (avoids real file I/O)
+  - app.services.submission._save_file          (avoids disk writes)
+  - app.services.submission.encrypt_file        (avoids disk reads on mocked paths)
 """
 
 import io
@@ -23,10 +23,10 @@ def _now():
 
 
 TASK_PATH    = "app.tasks.analysis.run_plagiarism_analysis"
-EXTRACT_PATH = "app.routers.submissions.extract_text"
-SAVE_PATH    = "app.routers.submissions._save_file"
-ENCRYPT_PATH = "app.routers.submissions.encrypt_file"
-DECRYPT_PATH = "app.routers.submissions.decrypt_file"
+SAVE_PATH    = "app.services.submission._save_file"
+EXTRACT_PATH = "app.services.submission.extract_text"
+ENCRYPT_PATH = "app.services.submission.encrypt_file"
+DECRYPT_PATH = "app.services.submission.decrypt_file"
 
 
 def _mock_task():

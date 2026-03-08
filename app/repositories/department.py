@@ -1,6 +1,6 @@
-from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from ..models import Department
 
@@ -23,7 +23,14 @@ def create(db: Session, name: str, code: str) -> Department:
         db.commit()
     except IntegrityError:
         db.rollback()
-        existing = db.query(Department).filter_by(code=code.strip().upper()).first()
+        existing = (
+            db.query(Department)
+            .filter(
+                (Department.code == code.strip().upper())
+                | (Department.name == name.strip())
+            )
+            .first()
+        )
         if not existing:
             raise HTTPException(status_code=409, detail="Department already exists") from None
         return existing
