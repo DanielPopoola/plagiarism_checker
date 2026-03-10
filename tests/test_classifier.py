@@ -11,8 +11,12 @@ import pytest
 from app.services.classifier import (
     ClassificationResult,
     classify,
-    _dispersion, _order_preserved,
-    _score_verbatim, _score_near_copy, _score_patchwork, _score_structural,
+    _dispersion,
+    _order_preserved,
+    _score_verbatim,
+    _score_near_copy,
+    _score_patchwork,
+    _score_structural,
 )
 from app.services.similarity import Fragment
 
@@ -21,14 +25,17 @@ from app.services.similarity import Fragment
 # Fragment factory helpers
 # ---------------------------------------------------------------------------
 
+
 def make_fragment(start_a, end_a, start_b=None, end_b=None) -> Fragment:
     end_b = end_b or end_a
     start_b = start_b if start_b is not None else start_a
     length = end_a - start_a
     return Fragment(
         text="word " * length,
-        start_a=start_a, end_a=end_a,
-        start_b=start_b, end_b=end_b,
+        start_a=start_a,
+        end_a=end_a,
+        start_b=start_b,
+        end_b=end_b,
         length=length,
     )
 
@@ -57,10 +64,16 @@ def near_copy_fragments():
 # Unit: _dispersion
 # ---------------------------------------------------------------------------
 
+
 class TestDispersion:
     def test_uneven_gaps_produce_low_dispersion(self):
         # Gaps: [0.002, 0.002, 0.976] — extreme variance → dispersion near 0
-        frags = [make_fragment(0, 1), make_fragment(1, 2), make_fragment(2, 3), make_fragment(490, 491)]
+        frags = [
+            make_fragment(0, 1),
+            make_fragment(1, 2),
+            make_fragment(2, 3),
+            make_fragment(490, 491),
+        ]
         d = _dispersion(frags, doc_len=500)
         assert d < 0.1
 
@@ -86,6 +99,7 @@ class TestDispersion:
 # Unit: _order_preserved
 # ---------------------------------------------------------------------------
 
+
 class TestOrderPreserved:
     def test_same_order_returns_one(self):
         frags = [make_fragment(i * 10, i * 10 + 5, start_b=i * 10) for i in range(5)]
@@ -110,6 +124,7 @@ class TestOrderPreserved:
 # ---------------------------------------------------------------------------
 # Unit: individual scoring functions
 # ---------------------------------------------------------------------------
+
 
 class TestScoringFunctions:
     def test_verbatim_score_high_for_long_single_block(self):
@@ -142,53 +157,78 @@ class TestScoringFunctions:
 # Integration: classify()
 # ---------------------------------------------------------------------------
 
+
 class TestClassify:
     def test_returns_classification_result(self):
         result = classify(verbatim_fragments(), 0.9, 200, 200)
         assert isinstance(result, ClassificationResult)
 
     def test_verbatim_detected(self):
-        result = classify(verbatim_fragments(), similarity_score=0.95,
-                          doc_a_token_count=200, doc_b_token_count=200)
+        result = classify(
+            verbatim_fragments(),
+            similarity_score=0.95,
+            doc_a_token_count=200,
+            doc_b_token_count=200,
+        )
         assert result.predicted_type == "verbatim"
 
     def test_patchwork_detected(self):
-        result = classify(patchwork_fragments(), similarity_score=0.5,
-                          doc_a_token_count=500, doc_b_token_count=500)
+        result = classify(
+            patchwork_fragments(),
+            similarity_score=0.5,
+            doc_a_token_count=500,
+            doc_b_token_count=500,
+        )
         assert result.predicted_type == "patchwork"
 
     def test_structural_detected_when_no_fragments_but_moderate_similarity(self):
         # No fragments → structural dominant branch
-        result = classify([], similarity_score=0.55,
-                          doc_a_token_count=300, doc_b_token_count=300)
+        result = classify([], similarity_score=0.55, doc_a_token_count=300, doc_b_token_count=300)
         assert result.predicted_type == "structural"
 
     def test_all_four_scores_present(self):
-        result = classify(near_copy_fragments(), similarity_score=0.75,
-                          doc_a_token_count=200, doc_b_token_count=200)
+        result = classify(
+            near_copy_fragments(),
+            similarity_score=0.75,
+            doc_a_token_count=200,
+            doc_b_token_count=200,
+        )
         assert hasattr(result, "score_verbatim")
         assert hasattr(result, "score_near_copy")
         assert hasattr(result, "score_patchwork")
         assert hasattr(result, "score_structural")
 
     def test_scores_sum_to_one(self):
-        result = classify(near_copy_fragments(), similarity_score=0.75,
-                          doc_a_token_count=200, doc_b_token_count=200)
-        total = result.score_verbatim + result.score_near_copy + result.score_patchwork + result.score_structural
+        result = classify(
+            near_copy_fragments(),
+            similarity_score=0.75,
+            doc_a_token_count=200,
+            doc_b_token_count=200,
+        )
+        total = (
+            result.score_verbatim
+            + result.score_near_copy
+            + result.score_patchwork
+            + result.score_structural
+        )
         assert total == pytest.approx(1.0, abs=0.01)
 
     def test_all_scores_bounded_0_to_1(self):
         result = classify(verbatim_fragments(), 0.9, 200, 200)
-        for score in (result.score_verbatim, result.score_near_copy,
-                      result.score_patchwork, result.score_structural):
+        for score in (
+            result.score_verbatim,
+            result.score_near_copy,
+            result.score_patchwork,
+            result.score_structural,
+        ):
             assert 0.0 <= score <= 1.0
 
     def test_predicted_type_is_argmax(self):
         result = classify(verbatim_fragments(), 0.9, 200, 200)
         scores = {
-            "verbatim":   result.score_verbatim,
-            "near_copy":  result.score_near_copy,
-            "patchwork":  result.score_patchwork,
+            "verbatim": result.score_verbatim,
+            "near_copy": result.score_near_copy,
+            "patchwork": result.score_patchwork,
             "structural": result.score_structural,
         }
         assert result.predicted_type == max(scores, key=scores.get)

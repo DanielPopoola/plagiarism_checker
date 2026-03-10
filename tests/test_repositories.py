@@ -3,6 +3,7 @@ tests/test_repositories.py
 
 Direct DB-layer tests. No HTTP, no mocks — just repos + in-memory SQLite.
 """
+
 import pytest
 from datetime import timedelta
 
@@ -24,6 +25,7 @@ from conftest import _now, make_user
 # ---------------------------------------------------------------------------
 # user repo
 # ---------------------------------------------------------------------------
+
 
 class TestUserRepo:
     def test_get_returns_user(self, db, student):
@@ -80,6 +82,7 @@ class TestUserRepo:
 # department repo
 # ---------------------------------------------------------------------------
 
+
 class TestDepartmentRepo:
     def test_get(self, db, department):
         assert dept_repo.get(db, department.id).id == department.id
@@ -98,7 +101,6 @@ class TestDepartmentRepo:
         assert d.code == "PHY"
 
     def test_create_duplicate_returns_existing(self, db, department):
-        # same code → returns the existing record, no exception
         result = dept_repo.create(db, "Different Name", department.code)
         assert result.id == department.id
 
@@ -106,6 +108,7 @@ class TestDepartmentRepo:
 # ---------------------------------------------------------------------------
 # course repo
 # ---------------------------------------------------------------------------
+
 
 class TestCourseRepo:
     def test_get(self, db, course):
@@ -139,9 +142,15 @@ class TestCourseRepo:
         assert exc.value.status_code == 400
 
     def test_delete_returns_dept_id(self, db, department, lecturer):
-        c = course_repo.create(db, title="Temp", code="TMP99",
-                               department_id=department.id, lecturer_id=lecturer.id,
-                               description=None, actor_id=lecturer.id)
+        c = course_repo.create(
+            db,
+            title="Temp",
+            code="TMP99",
+            department_id=department.id,
+            lecturer_id=lecturer.id,
+            description=None,
+            actor_id=lecturer.id,
+        )
         dept_id = course_repo.delete(db, c.id)
         assert dept_id == department.id
         with pytest.raises(HTTPException):
@@ -151,6 +160,7 @@ class TestCourseRepo:
 # ---------------------------------------------------------------------------
 # enrollment repo
 # ---------------------------------------------------------------------------
+
 
 class TestEnrollmentRepo:
     def test_enroll(self, db, student, course, admin):
@@ -192,6 +202,7 @@ class TestEnrollmentRepo:
 # ---------------------------------------------------------------------------
 # exam repo
 # ---------------------------------------------------------------------------
+
 
 class TestExamRepo:
     def test_get(self, db, open_exam):
@@ -235,6 +246,7 @@ class TestExamRepo:
 # ---------------------------------------------------------------------------
 # submission repo
 # ---------------------------------------------------------------------------
+
 
 class TestSubmissionRepo:
     def test_get(self, db, submission):
@@ -283,11 +295,16 @@ class TestSubmissionRepo:
 # pair repo
 # ---------------------------------------------------------------------------
 
+
 class TestPairRepo:
     def _seed_pair(self, db, sub_a, sub_b, score=0.8):
-        p = SimilarityPair(submission_a_id=sub_a.id, submission_b_id=sub_b.id,
-                           similarity_score=score, jaccard_score=0.6,
-                           originality_score=round(1 - score, 2))
+        p = SimilarityPair(
+            submission_a_id=sub_a.id,
+            submission_b_id=sub_b.id,
+            similarity_score=score,
+            jaccard_score=0.6,
+            originality_score=round(1 - score, 2),
+        )
         db.add(p)
         db.commit()
         db.refresh(p)
@@ -295,8 +312,9 @@ class TestPairRepo:
 
     def _extra_sub(self, db, exam, email):
         u = make_user(db, email, "Extra", Role.student)
-        s = Submission(exam_id=exam.id, student_id=u.id,
-                       file_path="u/x.txt", extracted_text="content " * 20)
+        s = Submission(
+            exam_id=exam.id, student_id=u.id, file_path="u/x.txt", extracted_text="content " * 20
+        )
         db.add(s)
         db.commit()
         db.refresh(s)
@@ -334,9 +352,13 @@ class TestPairRepo:
     def test_list_by_exam_empty_if_no_submissions(self, db, open_exam):
         from app.models import Exam
         from datetime import UTC, datetime
-        empty_exam = Exam(course_id=open_exam.course_id, title="Empty",
-                          opens_at=_now() - timedelta(hours=1),
-                          closes_at=_now() + timedelta(hours=1))
+
+        empty_exam = Exam(
+            course_id=open_exam.course_id,
+            title="Empty",
+            opens_at=_now() - timedelta(hours=1),
+            closes_at=_now() + timedelta(hours=1),
+        )
         db.add(empty_exam)
         db.commit()
         assert pair_repo.list_by_exam(db, empty_exam.id) == []

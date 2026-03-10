@@ -53,7 +53,9 @@ def _now():
 
 def make_user(db, email, name, role, active=True, department_id=None) -> User:
     u = User(
-        email=email, name=name, role=role,
+        email=email,
+        name=name,
+        role=role,
         department_id=department_id,
         hashed_pw=hash_password("password123"),
         is_active=active,
@@ -110,7 +112,8 @@ def inactive(db) -> User:
 @pytest.fixture
 def course(db, lecturer, department) -> Course:
     c = Course(
-        title="Computer Science 101", code="CS101",
+        title="Computer Science 101",
+        code="CS101",
         department_id=department.id,
         lecturer_id=lecturer.id,
     )
@@ -123,10 +126,12 @@ def course(db, lecturer, department) -> Course:
 @pytest.fixture
 def open_exam(db, course) -> Exam:
     e = Exam(
-        course_id=course.id, title="Midterm Essay",
+        course_id=course.id,
+        title="Midterm Essay",
         opens_at=_now() - timedelta(hours=1),
         closes_at=_now() + timedelta(hours=24),
-        allowed_formats="pdf,docx,txt", max_file_mb=10,
+        allowed_formats="pdf,docx,txt",
+        max_file_mb=10,
     )
     db.add(e)
     db.commit()
@@ -135,9 +140,19 @@ def open_exam(db, course) -> Exam:
 
 
 @pytest.fixture
+def enrolled_student(db, student, course) -> User:
+    from app.models import Enrollment
+
+    db.add(Enrollment(student_id=student.id, course_id=course.id))
+    db.commit()
+    return student
+
+
+@pytest.fixture
 def closed_exam(db, course) -> Exam:
     e = Exam(
-        course_id=course.id, title="Past Exam",
+        course_id=course.id,
+        title="Past Exam",
         opens_at=_now() - timedelta(days=7),
         closes_at=_now() - timedelta(days=1),
     )
@@ -150,7 +165,8 @@ def closed_exam(db, course) -> Exam:
 @pytest.fixture
 def future_exam(db, course) -> Exam:
     e = Exam(
-        course_id=course.id, title="Future Exam",
+        course_id=course.id,
+        title="Future Exam",
         opens_at=_now() + timedelta(days=1),
         closes_at=_now() + timedelta(days=7),
     )
@@ -163,7 +179,8 @@ def future_exam(db, course) -> Exam:
 @pytest.fixture
 def submission(db, open_exam, student) -> Submission:
     s = Submission(
-        exam_id=open_exam.id, student_id=student.id,
+        exam_id=open_exam.id,
+        student_id=student.id,
         file_path="uploads/1/test.txt",
         extracted_text="the mitochondria is the powerhouse of the cell " * 30,
     )

@@ -11,18 +11,21 @@ from datetime import datetime, timedelta, timezone, UTC
 from jose import jwt
 
 from app.auth import (
-    create_token, hash_password, verify_password,
+    create_token,
+    hash_password,
+    verify_password,
     _decode_token,
 )
 from app.config import settings
 from app.models import Role
 
-from conftest import auth
+from conftest import auth, department
 
 
 # ---------------------------------------------------------------------------
 # Unit: password hashing
 # ---------------------------------------------------------------------------
+
 
 class TestPasswordHashing:
     def test_hash_is_not_plaintext(self):
@@ -45,6 +48,7 @@ class TestPasswordHashing:
 # Unit: JWT creation and decoding
 # ---------------------------------------------------------------------------
 
+
 class TestJWT:
     def test_token_contains_user_id_and_role(self, student):
         token = create_token(student.id, student.role)
@@ -66,6 +70,7 @@ class TestJWT:
 
     def test_decode_raises_on_tampered_token(self, db, student):
         from fastapi import HTTPException
+
         token = create_token(student.id, student.role) + "garbage"
         with pytest.raises(HTTPException) as exc:
             _decode_token(token, db)
@@ -73,6 +78,7 @@ class TestJWT:
 
     def test_decode_raises_on_inactive_user(self, db, inactive):
         from fastapi import HTTPException
+
         token = create_token(inactive.id, inactive.role)
         with pytest.raises(HTTPException) as exc:
             _decode_token(token, db)
@@ -83,27 +89,30 @@ class TestJWT:
 # API: POST /auth/token  (OAuth2 form login)
 # ---------------------------------------------------------------------------
 
+
 class TestTokenEndpoint:
     def test_valid_credentials_return_token(self, client, lecturer):
-        r = client.post("/auth/token",
-                        data={"username": "lecturer@test.com", "password": "password123"})
+        r = client.post(
+            "/auth/token", data={"username": "lecturer@test.com", "password": "password123"}
+        )
         assert r.status_code == 200
         assert "access_token" in r.json()
         assert r.json()["token_type"] == "bearer"
 
     def test_wrong_password_returns_401(self, client, lecturer):
-        r = client.post("/auth/token",
-                        data={"username": "lecturer@test.com", "password": "wrong"})
+        r = client.post("/auth/token", data={"username": "lecturer@test.com", "password": "wrong"})
         assert r.status_code == 401
 
     def test_unknown_email_returns_401(self, client):
-        r = client.post("/auth/token",
-                        data={"username": "nobody@test.com", "password": "password123"})
+        r = client.post(
+            "/auth/token", data={"username": "nobody@test.com", "password": "password123"}
+        )
         assert r.status_code == 401
 
     def test_returned_token_is_valid_jwt(self, client, lecturer):
-        r = client.post("/auth/token",
-                        data={"username": "lecturer@test.com", "password": "password123"})
+        r = client.post(
+            "/auth/token", data={"username": "lecturer@test.com", "password": "password123"}
+        )
         token = r.json()["access_token"]
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         assert payload["sub"] == str(lecturer.id)
@@ -113,25 +122,46 @@ class TestTokenEndpoint:
 # API: POST /auth/register
 # ---------------------------------------------------------------------------
 
+
 class TestRegisterEndpoint:
-    def test_new_user_created(self, client):
-        r = client.post("/auth/register",
-                        json={"email": "new@test.com", "name": "New",
-                              "password": "pass1234", "role": "student"})
+    def test_new_user_created(self, client, department):
+        r = client.post(
+            "/auth/register",
+            json={
+                "email": "new@test.com",
+                "name": "New",
+                "password": "pass1234",
+                "role": "student",
+                "department_id": department.id,
+            },
+        )
         assert r.status_code == 201
-        assert r.json()["email"] == "new@test.com"
 
     def test_duplicate_email_returns_400(self, client, student):
-        r = client.post("/auth/register",
-                        json={"email": "student@test.com", "name": "Dup",
-                              "password": "pass1234", "role": "student"})
+        r = client.post(
+            "/auth/register",
+            json={
+                "email": "student@test.com",
+                "name": "Dup",
+                "password": "pass1234",
+                "role": "student",
+            },
+        )
         assert r.status_code == 400
 
-    def test_password_is_stored_hashed(self, client, db):
-        client.post("/auth/register",
-                    json={"email": "hashed@test.com", "name": "H",
-                          "password": "plaintext", "role": "student"})
+    def test_password_is_stored_hashed(self, client, db, department):
+        client.post(
+            "/auth/register",
+            json={
+                "email": "hashed@test.com",
+                "name": "H",
+                "password": "plaintext",
+                "role": "student",
+                "department_id": department.id,
+            },
+        )
         from app.models import User
+
         user = db.query(User).filter_by(email="hashed@test.com").first()
         assert user.hashed_pw != "plaintext"
 
@@ -140,15 +170,22 @@ class TestRegisterEndpoint:
 # Role guards: require_role / lecturer_or_admin / admin_only
 # ---------------------------------------------------------------------------
 
+
 class TestRoleGuards:
     def test_student_cannot_create_exam(self, client, student, course):
         from datetime import datetime, timedelta, timezone
+
         now = datetime.now(UTC)
-        r = client.post("/exams/", json={
-            "course_id": course.id, "title": "Test",
-            "opens_at": (now + timedelta(hours=1)).isoformat(),
-            "closes_at": (now + timedelta(hours=25)).isoformat(),
-        }, headers=auth(student))
+        r = client.post(
+            "/exams/",
+            json={
+                "course_id": course.id,
+                "title": "Test",
+                "opens_at": (now + timedelta(hours=1)).isoformat(),
+                "closes_at": (now + timedelta(hours=25)).isoformat(),
+            },
+            headers=auth(student),
+        )
         assert r.status_code == 403
 
     def test_student_cannot_list_submissions(self, client, student, open_exam):

@@ -63,6 +63,7 @@ class TestExtractDocx:
         pytest.importorskip("docx")
         from docx import Document
         import io
+
         path = tmp_path / "essay.docx"
         doc = Document()
         doc.add_paragraph("The mitochondria is the powerhouse of the cell.")
@@ -73,6 +74,7 @@ class TestExtractDocx:
     def test_multipage_docx_concatenated(self, tmp_path):
         pytest.importorskip("docx")
         from docx import Document
+
         path = tmp_path / "multi.docx"
         doc = Document()
         for i in range(5):
@@ -86,6 +88,7 @@ class TestExtractPdf:
     def test_reads_pdf_text(self, tmp_path):
         pytest.importorskip("pypdf")
         from pypdf import PdfWriter
+
         writer = PdfWriter()
         writer.add_blank_page(width=72, height=72)
         path = tmp_path / "essay.pdf"

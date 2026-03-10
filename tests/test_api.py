@@ -22,8 +22,8 @@ def _now():
     return datetime.now(UTC)
 
 
-TASK_PATH    = "app.tasks.analysis.run_plagiarism_analysis"
-SAVE_PATH    = "app.services.submission._save_file"
+TASK_PATH = "app.tasks.analysis.run_plagiarism_analysis"
+SAVE_PATH = "app.services.submission._save_file"
 EXTRACT_PATH = "app.services.submission.extract_text"
 ENCRYPT_PATH = "app.services.submission.encrypt_file"
 DECRYPT_PATH = "app.services.submission.decrypt_file"
@@ -48,6 +48,7 @@ def _upload_patches(extracted="extracted text content", path="uploads/1/essay.tx
 # ---------------------------------------------------------------------------
 # Exams — CRUD
 # ---------------------------------------------------------------------------
+
 
 class TestExamCRUD:
     def _payload(self, course_id):
@@ -94,8 +95,10 @@ class TestExamCRUD:
         r = client.get("/exams/999999", headers=auth(lecturer))
         assert r.status_code == 404
 
-    def test_student_sees_only_open_exams(self, client, student, open_exam, closed_exam, future_exam):
-        r = client.get("/exams/", headers=auth(student))
+    def test_student_sees_only_open_exams(
+        self, client, enrolled_student, open_exam, closed_exam, future_exam
+    ):
+        r = client.get("/exams/", headers=auth(enrolled_student))
         ids = [e["id"] for e in r.json()]
         assert open_exam.id in ids
         assert closed_exam.id not in ids
@@ -106,12 +109,15 @@ class TestExamCRUD:
 # Submissions — upload
 # ---------------------------------------------------------------------------
 
+
 class TestSubmissionUpload:
     def test_student_uploads_valid_txt(self, client, student, open_exam):
         with ExitStack() as stack:
-            for p in _upload_patches(): stack.enter_context(p)
-            r = client.post(f"/submissions/{open_exam.id}",
-                            files=[txt_upload()], headers=auth(student))
+            for p in _upload_patches():
+                stack.enter_context(p)
+            r = client.post(
+                f"/submissions/{open_exam.id}", files=[txt_upload()], headers=auth(student)
+            )
         assert r.status_code == 201
         assert r.json()["exam_id"] == open_exam.id
         assert r.json()["student_id"] == student.id
@@ -119,37 +125,41 @@ class TestSubmissionUpload:
     def test_submission_stores_extracted_text(self, client, db, student, open_exam):
         extracted = "the mitochondria is the powerhouse of the cell"
         with ExitStack() as stack:
-            for p in _upload_patches(extracted=extracted): stack.enter_context(p)
-            client.post(f"/submissions/{open_exam.id}",
-                        files=[txt_upload()], headers=auth(student))
+            for p in _upload_patches(extracted=extracted):
+                stack.enter_context(p)
+            client.post(f"/submissions/{open_exam.id}", files=[txt_upload()], headers=auth(student))
         sub = db.query(Submission).filter_by(exam_id=open_exam.id, student_id=student.id).first()
         assert sub is not None
         assert sub.extracted_text == extracted
 
     def test_submission_triggers_analysis_job(self, client, student, open_exam):
         mock_task = _mock_task()
-        with patch(TASK_PATH, mock_task), \
-             patch(SAVE_PATH, return_value="uploads/1/essay.txt"), \
-             patch(ENCRYPT_PATH), \
-             patch(DECRYPT_PATH, return_value=b"raw"), \
-             patch(EXTRACT_PATH, return_value="content"):
-            client.post(f"/submissions/{open_exam.id}",
-                        files=[txt_upload()], headers=auth(student))
+        with (
+            patch(TASK_PATH, mock_task),
+            patch(SAVE_PATH, return_value="uploads/1/essay.txt"),
+            patch(ENCRYPT_PATH),
+            patch(DECRYPT_PATH, return_value=b"raw"),
+            patch(EXTRACT_PATH, return_value="content"),
+        ):
+            client.post(f"/submissions/{open_exam.id}", files=[txt_upload()], headers=auth(student))
         mock_task.delay.assert_called_once_with(open_exam.id)
 
     def test_lecturer_cannot_submit(self, client, lecturer, open_exam):
-        r = client.post(f"/submissions/{open_exam.id}",
-                        files=[txt_upload()], headers=auth(lecturer))
+        r = client.post(
+            f"/submissions/{open_exam.id}", files=[txt_upload()], headers=auth(lecturer)
+        )
         assert r.status_code == 403
 
     def test_submission_rejected_outside_window_closed(self, client, student, closed_exam):
-        r = client.post(f"/submissions/{closed_exam.id}",
-                        files=[txt_upload()], headers=auth(student))
+        r = client.post(
+            f"/submissions/{closed_exam.id}", files=[txt_upload()], headers=auth(student)
+        )
         assert r.status_code == 400
 
     def test_submission_rejected_outside_window_future(self, client, student, future_exam):
-        r = client.post(f"/submissions/{future_exam.id}",
-                        files=[txt_upload()], headers=auth(student))
+        r = client.post(
+            f"/submissions/{future_exam.id}", files=[txt_upload()], headers=auth(student)
+        )
         assert r.status_code == 400
 
     def test_disallowed_file_format_rejected(self, client, student, open_exam):
@@ -169,25 +179,34 @@ class TestSubmissionUpload:
         assert r.status_code == 413
 
     def test_nonexistent_exam_returns_404(self, client, student):
-        r = client.post("/submissions/999999",
-                        files=[txt_upload()], headers=auth(student))
+        r = client.post("/submissions/999999", files=[txt_upload()], headers=auth(student))
         assert r.status_code == 404
 
     def test_upserts_job_on_resubmission(self, client, db, student, open_exam):
-        with patch(TASK_PATH, _mock_task()), \
-             patch(SAVE_PATH, return_value="uploads/1/a.txt"), \
-             patch(ENCRYPT_PATH), \
-             patch(DECRYPT_PATH, return_value=b"raw"), \
-             patch(EXTRACT_PATH, return_value="first content"):
-            client.post(f"/submissions/{open_exam.id}",
-                        files=[txt_upload("first " * 20)], headers=auth(student))
-        with patch(TASK_PATH, _mock_task()), \
-             patch(SAVE_PATH, return_value="uploads/1/b.txt"), \
-             patch(ENCRYPT_PATH), \
-             patch(DECRYPT_PATH, return_value=b"raw"), \
-             patch(EXTRACT_PATH, return_value="second content"):
-            client.post(f"/submissions/{open_exam.id}",
-                        files=[txt_upload("second " * 20)], headers=auth(student))
+        with (
+            patch(TASK_PATH, _mock_task()),
+            patch(SAVE_PATH, return_value="uploads/1/a.txt"),
+            patch(ENCRYPT_PATH),
+            patch(DECRYPT_PATH, return_value=b"raw"),
+            patch(EXTRACT_PATH, return_value="first content"),
+        ):
+            client.post(
+                f"/submissions/{open_exam.id}",
+                files=[txt_upload("first " * 20)],
+                headers=auth(student),
+            )
+        with (
+            patch(TASK_PATH, _mock_task()),
+            patch(SAVE_PATH, return_value="uploads/1/b.txt"),
+            patch(ENCRYPT_PATH),
+            patch(DECRYPT_PATH, return_value=b"raw"),
+            patch(EXTRACT_PATH, return_value="second content"),
+        ):
+            client.post(
+                f"/submissions/{open_exam.id}",
+                files=[txt_upload("second " * 20)],
+                headers=auth(student),
+            )
         jobs = db.query(PlagiarismJob).filter_by(exam_id=open_exam.id).all()
         assert len(jobs) == 1
         assert jobs[0].status == JobStatus.pending
@@ -196,6 +215,7 @@ class TestSubmissionUpload:
 # ---------------------------------------------------------------------------
 # Submissions — list & job status
 # ---------------------------------------------------------------------------
+
 
 class TestSubmissionRead:
     def test_lecturer_lists_submissions(self, client, lecturer, open_exam, submission):
@@ -224,12 +244,18 @@ class TestSubmissionRead:
 # Reports — pairs & review
 # ---------------------------------------------------------------------------
 
+
 class TestReports:
     def _seed_pair(self, db, sub_a, sub_b, score=0.85):
         from app.models import SimilarityPair
-        p = SimilarityPair(submission_a_id=sub_a.id, submission_b_id=sub_b.id,
-                           similarity_score=score, jaccard_score=0.7,
-                           originality_score=round(1 - score, 2))
+
+        p = SimilarityPair(
+            submission_a_id=sub_a.id,
+            submission_b_id=sub_b.id,
+            similarity_score=score,
+            jaccard_score=0.7,
+            originality_score=round(1 - score, 2),
+        )
         db.add(p)
         db.commit()
         db.refresh(p)
@@ -237,9 +263,11 @@ class TestReports:
 
     def _extra_sub(self, db, exam, email):
         from app.models import Role
+
         u = make_user(db, email, "Extra", Role.student)
-        s = Submission(exam_id=exam.id, student_id=u.id,
-                       file_path="u/x.txt", extracted_text="content " * 20)
+        s = Submission(
+            exam_id=exam.id, student_id=u.id, file_path="u/x.txt", extracted_text="content " * 20
+        )
         db.add(s)
         db.commit()
         db.refresh(s)
@@ -254,11 +282,18 @@ class TestReports:
 
     def test_pairs_sorted_by_similarity_desc(self, client, db, lecturer, open_exam, submission):
         from app.models import SimilarityPair, Role
+
         subs = [self._extra_sub(db, open_exam, f"sort{i}@test.com") for i in range(3)]
         for sub, score in zip(subs, [0.9, 0.5, 0.3]):
-            db.add(SimilarityPair(submission_a_id=submission.id, submission_b_id=sub.id,
-                                  similarity_score=score, jaccard_score=0.0,
-                                  originality_score=1 - score))
+            db.add(
+                SimilarityPair(
+                    submission_a_id=submission.id,
+                    submission_b_id=sub.id,
+                    similarity_score=score,
+                    jaccard_score=0.0,
+                    originality_score=1 - score,
+                )
+            )
         db.commit()
         r = client.get(f"/reports/{open_exam.id}/pairs", headers=auth(lecturer))
         scores = [p["similarity_score"] for p in r.json()]
@@ -278,17 +313,21 @@ class TestReports:
     def test_review_decision_persists(self, client, db, lecturer, open_exam, submission, status):
         s2 = self._extra_sub(db, open_exam, f"rev_{status}@test.com")
         pair = self._seed_pair(db, submission, s2)
-        r = client.post(f"/reports/pairs/{pair.id}/review",
-                        json={"status": status, "notes": "test note"},
-                        headers=auth(lecturer))
+        r = client.post(
+            f"/reports/pairs/{pair.id}/review",
+            json={"status": status, "notes": "test note"},
+            headers=auth(lecturer),
+        )
         assert r.status_code == 200
         assert r.json()["status"] == status
 
     def test_review_access_logged(self, client, db, lecturer, open_exam):
         client.get(f"/reports/{open_exam.id}/pairs", headers=auth(lecturer))
-        log = db.query(AuditLog).filter_by(
-            action=AuditAction.report_viewed, target_id=open_exam.id
-        ).first()
+        log = (
+            db.query(AuditLog)
+            .filter_by(action=AuditAction.report_viewed, target_id=open_exam.id)
+            .first()
+        )
         assert log is not None
         assert log.user_id == lecturer.id
 
@@ -297,28 +336,30 @@ class TestReports:
 # Auth endpoints
 # ---------------------------------------------------------------------------
 
+
 class TestAuthEndpoints:
     def test_valid_login_returns_token(self, client, lecturer):
-        r = client.post("/auth/token",
-                        data={"username": "lecturer@test.com", "password": "password123"})
+        r = client.post(
+            "/auth/token", data={"username": "lecturer@test.com", "password": "password123"}
+        )
         assert r.status_code == 200
         assert "access_token" in r.json()
 
     def test_wrong_password_returns_401(self, client, lecturer):
-        r = client.post("/auth/token",
-                        data={"username": "lecturer@test.com", "password": "wrong"})
+        r = client.post("/auth/token", data={"username": "lecturer@test.com", "password": "wrong"})
         assert r.status_code == 401
 
-    def test_register_new_user(self, client):
-        r = client.post("/auth/register",
-                        json={"email": "new@test.com", "name": "New",
-                              "password": "pass1234", "role": "student"})
-        assert r.status_code == 201
-
     def test_duplicate_email_returns_400(self, client, student):
-        r = client.post("/auth/register",
-                        json={"email": "student@test.com", "name": "Dup",
-                              "password": "pass1234", "role": "student"})
+        r = client.post(
+            "/auth/register",
+            json={
+                "email": "student@test.com",
+                "name": "Dup",
+                "password": "pass1234",
+                "role": "student",
+                "departement_id": 1,
+            },
+        )
         assert r.status_code == 400
 
 
@@ -326,13 +367,19 @@ class TestAuthEndpoints:
 # Role guards
 # ---------------------------------------------------------------------------
 
+
 class TestRoleGuards:
     def test_student_cannot_create_exam(self, client, student, course):
-        r = client.post("/exams/", json={
-            "course_id": course.id, "title": "T",
-            "opens_at": (_now() + timedelta(hours=1)).isoformat(),
-            "closes_at": (_now() + timedelta(hours=25)).isoformat(),
-        }, headers=auth(student))
+        r = client.post(
+            "/exams/",
+            json={
+                "course_id": course.id,
+                "title": "T",
+                "opens_at": (_now() + timedelta(hours=1)).isoformat(),
+                "closes_at": (_now() + timedelta(hours=25)).isoformat(),
+            },
+            headers=auth(student),
+        )
         assert r.status_code == 403
 
     def test_student_cannot_list_submissions(self, client, student, open_exam):
@@ -364,6 +411,7 @@ class TestRoleGuards:
 # Admin
 # ---------------------------------------------------------------------------
 
+
 class TestAdmin:
     def test_admin_lists_all_users(self, client, admin, student, lecturer):
         r = client.get("/admin/users", headers=auth(admin))
@@ -392,8 +440,10 @@ class TestAdmin:
 
     def test_deactivation_audit_logged(self, client, db, admin, student):
         client.patch(f"/admin/users/{student.id}/deactivate", headers=auth(admin))
-        log = db.query(AuditLog).filter_by(
-            action=AuditAction.user_deactivated, target_id=student.id
-        ).first()
+        log = (
+            db.query(AuditLog)
+            .filter_by(action=AuditAction.user_deactivated, target_id=student.id)
+            .first()
+        )
         assert log is not None
         assert log.user_id == admin.id

@@ -1,6 +1,6 @@
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
 
 from ..models import Department
 
@@ -17,22 +17,16 @@ def list_all(db: Session) -> list[Department]:
 
 
 def create(db: Session, name: str, code: str) -> Department:
-    dept = Department(name=name.strip(), code=code.strip().upper())
-    db.add(dept)
     try:
+        with db.begin_nested():  # savepoint — rolls back only to here on failure
+            dept = Department(name=name.strip(), code=code.strip().upper())
+            db.add(dept)
         db.commit()
     except IntegrityError:
-        db.rollback()
-        existing = (
+        return (
             db.query(Department)
-            .filter(
-                (Department.code == code.strip().upper())
-                | (Department.name == name.strip())
-            )
+            .filter((Department.code == code.strip().upper()) | (Department.name == name.strip()))
             .first()
         )
-        if not existing:
-            raise HTTPException(status_code=409, detail="Department already exists") from None
-        return existing
     db.refresh(dept)
     return dept

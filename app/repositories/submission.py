@@ -56,6 +56,27 @@ def create(
     return sub
 
 
+def upsert(db, exam_id, student_id, file_path, original_filename, extracted_text):
+    sub = get_for_student_exam(db, exam_id, student_id)
+    if sub:
+        sub.file_path = file_path
+        sub.original_filename = original_filename
+        sub.extracted_text = extracted_text
+        sub.uploaded_at = datetime.now(UTC)
+    else:
+        sub = Submission(
+            exam_id=exam_id,
+            student_id=student_id,
+            file_path=file_path,
+            original_filename=original_filename,
+            extracted_text=extracted_text,
+        )
+        db.add(sub)
+    db.commit()
+    db.refresh(sub)
+    return sub
+
+
 def upsert_job(db: Session, exam_id: int) -> PlagiarismJob:
     job = db.query(PlagiarismJob).filter_by(exam_id=exam_id).first()
     if job:

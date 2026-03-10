@@ -9,10 +9,14 @@ Covers: compare(), bulk_compare(), _cosine_score(), _jaccard_score(),
 
 import pytest
 from app.services.similarity import (
-    Fragment, SimilarityResult,
-    compare, bulk_compare,
-    _cosine_score, _jaccard_score,
-    _extract_fragments, _merge_overlapping,
+    Fragment,
+    SimilarityResult,
+    compare,
+    bulk_compare,
+    _cosine_score,
+    _jaccard_score,
+    _extract_fragments,
+    _merge_overlapping,
 )
 
 # ---------------------------------------------------------------------------
@@ -21,9 +25,11 @@ from app.services.similarity import (
 
 VERBATIM = "the mitochondria is the powerhouse of the cell " * 25
 PARAPHRASE = "mitochondria serve as the energy source of cells and produce atp " * 25
-UNRELATED = "quantum entanglement is a phenomenon in particle physics describing correlated states " * 20
+UNRELATED = (
+    "quantum entanglement is a phenomenon in particle physics describing correlated states " * 20
+)
 PATCHWORK = (
-    "the mitochondria is the powerhouse of the cell "   # from VERBATIM
+    "the mitochondria is the powerhouse of the cell "  # from VERBATIM
     "water covers seventy percent of the earths surface "
     "democracy is a system of government by the whole population "
     "the mitochondria is the powerhouse of the cell "
@@ -33,6 +39,7 @@ PATCHWORK = (
 # ---------------------------------------------------------------------------
 # Unit: _cosine_score
 # ---------------------------------------------------------------------------
+
 
 class TestCosineScore:
     def test_identical_texts_score_one(self):
@@ -60,6 +67,7 @@ class TestCosineScore:
 # ---------------------------------------------------------------------------
 # Unit: _jaccard_score
 # ---------------------------------------------------------------------------
+
 
 class TestJaccardScore:
     def test_identical_texts_score_one(self):
@@ -89,6 +97,7 @@ class TestJaccardScore:
 # Unit: _extract_fragments
 # ---------------------------------------------------------------------------
 
+
 class TestExtractFragments:
     def test_identical_texts_produce_fragments(self):
         frags = _extract_fragments(VERBATIM, VERBATIM)
@@ -106,7 +115,7 @@ class TestExtractFragments:
         frags = _extract_fragments(VERBATIM, VERBATIM)
         tokens = VERBATIM.split()
         for f in frags:
-            expected = " ".join(tokens[f.start_a:f.end_a])
+            expected = " ".join(tokens[f.start_a : f.end_a])
             assert f.text == expected
 
     def test_min_tokens_filter_respected(self):
@@ -125,6 +134,7 @@ class TestExtractFragments:
 # ---------------------------------------------------------------------------
 # Unit: _merge_overlapping
 # ---------------------------------------------------------------------------
+
 
 class TestMergeOverlapping:
     def test_empty_input_returns_empty(self):
@@ -151,6 +161,7 @@ class TestMergeOverlapping:
 # ---------------------------------------------------------------------------
 # Integration: compare()
 # ---------------------------------------------------------------------------
+
 
 class TestCompare:
     def test_returns_similarity_result(self):
@@ -194,6 +205,7 @@ class TestCompare:
 # ---------------------------------------------------------------------------
 # Integration: bulk_compare()
 # ---------------------------------------------------------------------------
+
 
 class TestBulkCompare:
     def test_returns_all_pairs_above_threshold(self):

@@ -34,8 +34,7 @@ def list_submissions(
     from ..repositories import exam as exam_repo
 
     exam = exam_repo.get(db, exam_id)
-    if exam.lecturer_id != user.id and user.role != Role.admin:
-        raise HTTPException(status_code=403, detail="Not your exam")
+    exam_repo.assert_access(exam, user)
     return sub_repo.list_by_exam(db, exam_id)
 
 

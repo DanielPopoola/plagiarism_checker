@@ -28,7 +28,7 @@ def upload(db: Session, exam_id: int, file: UploadFile, user: User, ip: str | No
     ext = file_path.rsplit(".", 1)[-1].lower()
     text = extract_text(raw_bytes, ext)
 
-    sub = sub_repo.create(
+    sub = sub_repo.upsert(
         db,
         exam_id=exam_id,
         student_id=user.id,

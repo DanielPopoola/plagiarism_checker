@@ -50,4 +50,6 @@ def get_exam(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ):
-    return exam_repo.get(db, exam_id)
+    exam = exam_repo.get(db, exam_id)
+    exam_repo.assert_access(exam, user)
+    return exam
