@@ -92,6 +92,7 @@ def get_exam_detail(
         "submissions": submissions,
         "pairs": pairs,
         "now": datetime.now(UTC).replace(tzinfo=None),
+        "min_score": min_score,
     }
 
 
