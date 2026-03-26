@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..models import AuditAction, Enrollment, Exam, Role, User
 from ..services.audit import log as audit
+from ..timezone import utc_naive
 
 
 def get(db: Session, exam_id: int) -> Exam:
@@ -19,7 +20,7 @@ def list_by_course(db: Session, course_id: int) -> list[Exam]:
 
 
 def list_open_for_student(db: Session, student_id: int) -> list[Exam]:
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utc_naive(datetime.now(UTC))
     enrolled_ids = [
         e.course_id for e in db.query(Enrollment).filter_by(student_id=student_id).all()
     ]

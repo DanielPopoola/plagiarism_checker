@@ -21,7 +21,7 @@
         <div>
           <span class="text-sm font-semibold text-slate-800">{{ exam.title }}</span>
           <span class="text-xs text-slate-400 ml-2">
-            {% if exam.course %}{{ exam.course.code }} · {% endif %}closes {{ exam.closes_at.strftime("%d %b %H:%M") }}
+            {% if exam.course %}{{ exam.course.code }} · {% endif %}closes {{ exam.closes_at | lagos("%d %b %H:%M") }}
           </span>
         </div>
         <a href="/student/exams/{{ exam.id }}/submit"

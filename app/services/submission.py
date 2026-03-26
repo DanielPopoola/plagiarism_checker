@@ -10,6 +10,7 @@ from ..repositories import submission as sub_repo
 from ..services.audit import log as audit
 from ..services.crypto import decrypt_file, encrypt_file
 from ..services.extraction import extract_text
+from ..timezone import utc_naive
 
 
 def upload(db: Session, exam_id: int, file: UploadFile, user: User, ip: str | None) -> Submission:
@@ -18,8 +19,8 @@ def upload(db: Session, exam_id: int, file: UploadFile, user: User, ip: str | No
     from ..repositories import exam as exam_repo
 
     exam = exam_repo.get(db, exam_id)
-    now = datetime.now(UTC).replace(tzinfo=None)
-    if not (exam.opens_at <= now <= exam.closes_at):
+    now = utc_naive(datetime.now(UTC))
+    if not (utc_naive(exam.opens_at) <= now <= utc_naive(exam.closes_at)):
         raise HTTPException(status_code=400, detail="Submission window is not open")
 
     file_path = _save_file(file, exam)

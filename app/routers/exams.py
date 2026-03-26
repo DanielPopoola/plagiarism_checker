@@ -8,6 +8,7 @@ from ..database import get_db
 from ..models import Role, User
 from ..repositories import exam as exam_repo
 from ..schemas import ExamCreate, ExamOut
+from ..timezone import to_utc_naive
 
 router = APIRouter(prefix="/exams", tags=["exams"])
 
@@ -23,7 +24,10 @@ def create_exam(
     course = course_repo.get(db, body.course_id)
     if user.role == Role.lecturer and course.department_id != user.department_id:
         raise HTTPException(status_code=403, detail="Not your department")
-    return exam_repo.create(db, **body.model_dump(), actor_id=user.id)
+    payload = body.model_dump()
+    payload["opens_at"] = to_utc_naive(payload["opens_at"])
+    payload["closes_at"] = to_utc_naive(payload["closes_at"])
+    return exam_repo.create(db, **payload, actor_id=user.id)
 
 
 @router.get("/", response_model=list[ExamOut])
