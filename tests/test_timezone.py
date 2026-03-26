@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.services import dashboard as dash_svc
-from app.timezone import to_wat, utc_naive, wat_input_to_utc_naive
+from app.timezone import to_utc_naive, to_wat, utc_naive, wat_input_to_utc_naive
 
 
 def test_wat_input_to_utc_naive_converts_datetime_local_value():
@@ -22,6 +22,10 @@ def test_to_wat_converts_stored_utc_naive_for_frontend_display():
 def test_utc_naive_normalizes_aware_datetimes():
     wat_dt = datetime(2026, 3, 26, 10, 30, tzinfo=to_wat(datetime(2026, 3, 26, 9, 30)).tzinfo)
     assert utc_naive(wat_dt) == datetime(2026, 3, 26, 9, 30)
+
+
+def test_to_utc_naive_treats_naive_time_as_wat():
+    assert to_utc_naive(datetime(2026, 3, 26, 10, 30)) == datetime(2026, 3, 26, 9, 30)
 
 
 def test_dashboard_create_exam_stores_wat_window_as_utc(db, lecturer, course):

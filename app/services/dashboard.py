@@ -8,7 +8,7 @@ from ..repositories import exam as exam_repo
 from ..repositories import pair as pair_repo
 from ..repositories import submission as sub_repo
 from ..services.audit import log as audit
-from ..timezone import utc_naive, wat_input_to_utc_naive
+from ..timezone import to_utc_naive, utc_naive
 
 
 def get_courses(db: Session, user: User) -> list[Course]:
@@ -37,8 +37,8 @@ def create_exam(
     if user.role == Role.lecturer and course.department_id != user.department_id:
         raise HTTPException(status_code=403, detail="You don't have access to that course.")
     try:
-        opens = wat_input_to_utc_naive(opens_at)
-        closes = wat_input_to_utc_naive(closes_at)
+        opens = to_utc_naive(datetime.fromisoformat(opens_at))
+        closes = to_utc_naive(datetime.fromisoformat(closes_at))
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format.") from None
     if closes <= opens:

@@ -67,6 +67,16 @@ class TestExamCRUD:
         assert r.status_code == 201
         assert r.json()["title"] == "Final Essay"
 
+    def test_lecturer_creates_exam_with_naive_wat_times_stored_as_utc(self, client, lecturer, course):
+        payload = self._payload(course.id)
+        payload["opens_at"] = "2026-03-26T10:25:00"
+        payload["closes_at"] = "2026-03-26T10:30:00"
+
+        r = client.post("/exams/", json=payload, headers=auth(lecturer))
+        assert r.status_code == 201
+        assert r.json()["opens_at"].startswith("2026-03-26T09:25:00")
+        assert r.json()["closes_at"].startswith("2026-03-26T09:30:00")
+
     def test_create_exam_wrong_course_returns_403(self, client, other_lecturer, course):
         r = client.post("/exams/", json=self._payload(course.id), headers=auth(other_lecturer))
         assert r.status_code == 403

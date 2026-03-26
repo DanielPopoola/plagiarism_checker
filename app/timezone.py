@@ -21,6 +21,13 @@ def wat_input_to_utc_naive(value: str) -> datetime:
     return parsed.astimezone(UTC).replace(tzinfo=None)
 
 
+def to_utc_naive(dt: datetime, *, naive_tz: ZoneInfo = WAT) -> datetime:
+    """Convert any datetime to naive UTC, assuming `naive_tz` when tz is missing."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=naive_tz)
+    return dt.astimezone(UTC).replace(tzinfo=None)
+
+
 def to_wat(dt: datetime) -> datetime:
     """Convert stored UTC datetime (aware/naive) to WAT-aware datetime."""
     if dt.tzinfo is None:
