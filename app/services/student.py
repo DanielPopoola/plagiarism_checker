@@ -7,6 +7,7 @@ from ..repositories import exam as exam_repo
 from ..repositories import pair as pair_repo
 from ..repositories import submission as sub_repo
 from ..services.audit import log as audit
+from ..timezone import utc_naive
 
 
 def get_dashboard_data(db: Session, user: User) -> dict:
@@ -31,7 +32,7 @@ def browse_courses(db: Session, user: User) -> dict:
 def get_course_detail(db: Session, course_id: int, user: User) -> dict:
     from datetime import UTC, datetime
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utc_naive(datetime.now(UTC))
     course = db.get(Course, course_id)
     if not course or course.department_id != user.department_id:
         raise HTTPException(status_code=404)
@@ -87,9 +88,9 @@ def unenroll_student(db: Session, course_id: int, user: User) -> None:
 def get_submit_form_data(db: Session, exam_id: int, user: User) -> dict:
     from datetime import UTC, datetime
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utc_naive(datetime.now(UTC))
     exam = exam_repo.get(db, exam_id)
-    if not (exam.opens_at <= now <= exam.closes_at):
+    if not (utc_naive(exam.opens_at) <= now <= utc_naive(exam.closes_at)):
         raise HTTPException(status_code=400, detail="Submission window is not open")
     if not enroll_repo.get_for_student_course(db, user.id, exam.course_id):
         raise HTTPException(status_code=403, detail="You are not enrolled in this course")

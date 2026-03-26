@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -9,9 +8,7 @@ from ..repositories import exam as exam_repo
 from ..repositories import pair as pair_repo
 from ..repositories import submission as sub_repo
 from ..services.audit import log as audit
-
-lagos = ZoneInfo("Africa/Lagos")
-utc = ZoneInfo("UTC")
+from ..timezone import utc_naive, wat_input_to_utc_naive
 
 
 def get_courses(db: Session, user: User) -> list[Course]:
@@ -40,18 +37,8 @@ def create_exam(
     if user.role == Role.lecturer and course.department_id != user.department_id:
         raise HTTPException(status_code=403, detail="You don't have access to that course.")
     try:
-        opens = (
-            datetime.fromisoformat(opens_at)
-            .replace(tzinfo=lagos)
-            .astimezone(utc)
-            .replace(tzinfo=None)
-        )
-        closes = (
-            datetime.fromisoformat(closes_at)
-            .replace(tzinfo=lagos)
-            .astimezone(utc)
-            .replace(tzinfo=None)
-        )
+        opens = wat_input_to_utc_naive(opens_at)
+        closes = wat_input_to_utc_naive(closes_at)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format.") from None
     if closes <= opens:
@@ -91,7 +78,7 @@ def get_exam_detail(
         "job": job,
         "submissions": submissions,
         "pairs": pairs,
-        "now": datetime.now(UTC).replace(tzinfo=None),
+        "now": utc_naive(datetime.now(UTC)),
         "min_score": min_score,
     }
 
