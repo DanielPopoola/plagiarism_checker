@@ -62,11 +62,12 @@
       </thead>
       <tbody class="divide-y divide-slate-100">
         {% for exam in exams %}
-        {% set opens = exam.opens_at.replace(tzinfo=None) %}
-        {% set closes = exam.closes_at.replace(tzinfo=None) %}
-        {% if now < opens %}
+        {% set now_wat = to_wat(now).replace(tzinfo=None) %}
+        {% set opens = to_wat(exam.opens_at).replace(tzinfo=None) %}
+        {% set closes = to_wat(exam.closes_at).replace(tzinfo=None) %}
+        {% if now_wat < opens %}
             {% set window = "upcoming" %}
-        {% elif now <= closes %}
+        {% elif now_wat <= closes %}
             {% set window = "open" %}
         {% else %}
             {% set window = "closed" %}
@@ -79,8 +80,8 @@
             <p class="text-xs text-slate-400 mt-0.5">{{ exam.description }}</p>
             {% endif %}
           </td>
-          <td class="px-6 py-4 text-slate-500 text-xs">{{ exam.opens_at | lagos("%d %b %Y") }}</td>
-          <td class="px-6 py-4 text-slate-500 text-xs">{{ exam.closes_at | lagos("%d %b %Y") }}</td>
+          <td class="px-6 py-4 text-slate-500 text-xs">{{ exam.opens_at | lagos("%d %b %Y %H:%M") }}</td>
+          <td class="px-6 py-4 text-slate-500 text-xs">{{ exam.closes_at | lagos("%d %b %Y %H:%M") }}</td>
           <td class="px-6 py-4">
             {% if already_submitted %}
             <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">Submitted</span>
