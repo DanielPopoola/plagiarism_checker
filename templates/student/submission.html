@@ -103,8 +103,8 @@
             {% endif %}
           </td>
           <td class="px-5 py-4 text-slate-500 text-sm">
-            {% if pair.type_result and pair.type_result.confidence_score is not none %}
-              {{ (pair.type_result.confidence_score * 100)|int }}%
+            {% if pair.type_result %}
+              {{ ([pair.type_result.score_verbatim, pair.type_result.score_near_copy, pair.type_result.score_patchwork, pair.type_result.score_structural] | max * 100)|int }}%
             {% else %}
               <span class="text-slate-300 text-xs">—</span>
             {% endif %}

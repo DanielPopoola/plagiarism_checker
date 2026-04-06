@@ -47,7 +47,18 @@ cp .env.example .env
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### Running
+### Docker Compose (recommended)
+
+```bash
+cp .env.example .env
+# Set SECRET_KEY and FERNET_KEY before first start
+
+docker compose up --build
+```
+
+This starts FastAPI (`web`), Celery (`worker`), Redis, and PostgreSQL.
+
+### Running without Docker
 
 Three processes must run concurrently:
 

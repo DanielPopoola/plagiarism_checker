@@ -1,14 +1,17 @@
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from .auth import get_current_user_optional
 from .database import Base, engine, get_db
+from .models import User
 from .routers import admin, auth, courses, dashboard, exams, reports, student, submissions
 from .schemas import TokenOut, UserCreate, UserOut
 from .services.auth import login, register
+from .templates import templates
 
 Base.metadata.create_all(bind=engine)
 
@@ -28,8 +31,14 @@ for router in [
 
 
 @app.get("/")
-def root():
-    return RedirectResponse(url="/login")
+def root(
+    request: Request,
+    user: Annotated[User | None, Depends(get_current_user_optional)],
+):
+    if user:
+        redirect_map = {"student": "/student/dashboard", "admin": "/admin/"}
+        return RedirectResponse(url=redirect_map.get(user.role, "/dashboard/"))
+    return templates.TemplateResponse("landing.html", {"request": request})
 
 
 @app.post("/auth/token", response_model=TokenOut)

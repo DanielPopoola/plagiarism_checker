@@ -20,7 +20,7 @@
   {% endif %}
 
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-    <form method="post" action="/dashboard/exams/new" class="space-y-5">
+    <form method="post" action="/dashboard/exams/new" class="space-y-5" id="exam-form">
       <div>
         <label class="block text-sm font-bold text-slate-700 mb-1">Course</label>
         <select name="course_id" required
@@ -49,12 +49,12 @@
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1">Opens at</label>
-          <input type="datetime-local" name="opens_at" required
+          <input type="datetime-local" name="opens_at" id="opens-at" required
                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1">Closes at</label>
-          <input type="datetime-local" name="closes_at" required
+          <input type="datetime-local" name="closes_at" id="closes-at" required
                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
         </div>
       </div>
@@ -78,7 +78,7 @@
       </div>
 
       <div class="flex gap-3 pt-2">
-        <button type="submit"
+        <button type="submit" data-loading-text="<span class='material-symbols-outlined animate-spin' style='font-size:18px'>progress_activity</span> Creating..."
                 class="flex-1 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20">
           <span class="material-symbols-outlined" style="font-size:18px">add_circle</span>
           Create exam
@@ -91,4 +91,27 @@
     </form>
   </div>
 </div>
+
+<script>
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  const minDateTime = now.toISOString().slice(0, 16);
+  const opensAt = document.getElementById("opens-at");
+  const closesAt = document.getElementById("closes-at");
+  if (opensAt && closesAt) {
+    opensAt.min = minDateTime;
+    closesAt.min = minDateTime;
+    opensAt.addEventListener("change", () => {
+      closesAt.min = opensAt.value || minDateTime;
+    });
+  }
+
+  const examForm = document.getElementById("exam-form");
+  examForm?.addEventListener("submit", (event) => {
+    if (opensAt?.value && closesAt?.value && closesAt.value <= opensAt.value) {
+      event.preventDefault();
+      alert("Closing time must be after opening time.");
+    }
+  });
+</script>
 {% endblock %}
