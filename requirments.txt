@@ -153,6 +153,10 @@ pypdf==6.7.5
     # via plagiarism-checker (pyproject.toml)
 pytest==9.0.2
     # via plagiarism-checker (pyproject.toml)
+psycopg==3.2.12
+    # via plagiarism-checker (pyproject.toml)
+psycopg-binary==3.2.12
+    # via psycopg
 python-dateutil==2.9.0.post0
     # via celery
 python-docx==1.2.0

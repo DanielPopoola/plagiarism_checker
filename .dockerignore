@@ -1,0 +1,12 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+htmlcov/
+coverage.xml
+.env
+uploads/
+plagiarism.db
