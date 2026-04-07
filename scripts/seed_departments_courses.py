@@ -1,18 +1,24 @@
-"""Seed departments and courses via the API.
+"""Seed an initial admin, departments, and courses directly in the database.
 
-Each department gets its own set of courses. Shared course codes (e.g. GNS 302)
-are created once per department they appear in — they are no longer deduplicated
-across departments, since a course now belongs to exactly one department.
+This script is idempotent and safe to run repeatedly. Existing rows are reused.
 
-Usage:
-    python scripts/seed_departments_courses.py \
-        --base-url http://localhost:8000 \
-        --email admin@test.com \
-        --password password123
+Environment variables:
+    SEED_ADMIN_EMAIL     (default: admin@example.com)
+    SEED_ADMIN_PASSWORD  (default: admin123)
+    SEED_ADMIN_NAME      (default: System Admin)
 """
 
-import argparse
-import requests
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.auth import hash_password
+from app.database import Base, SessionLocal, engine
+from app.models import Course, Department, Role, User
 
 SHARED_SOCIAL = [
     ("FRN 302", "ADVANCE FRENCH"),
@@ -21,7 +27,8 @@ SHARED_SOCIAL = [
 ]
 
 CURRICULUM: dict[str, list[tuple[str, str]]] = {
-    "INTERNATIONAL RELATIONS": SHARED_SOCIAL + [
+    "INTERNATIONAL RELATIONS": SHARED_SOCIAL
+    + [
         ("POL 331", "THE GREAT CHINESE ECONOMY"),
         ("POL 301", "WORLD POLITICS"),
         ("INR 311", "INTERNATIONAL FINANCE AND POLITICS OF FOREIGN AIDS"),
@@ -29,7 +36,8 @@ CURRICULUM: dict[str, list[tuple[str, str]]] = {
         ("INR 331", "ELEMENTS OF CONTEMPORARY GLOBAL ISSUES"),
         ("INR 301", "GLOBAL TERRORISM AND POLITICAL VIOLENCE"),
     ],
-    "POLITICAL SCIENCE": SHARED_SOCIAL + [
+    "POLITICAL SCIENCE": SHARED_SOCIAL
+    + [
         ("POL 331", "THE GREAT CHINESE ECONOMY"),
         ("POL 301", "WORLD POLITICS"),
         ("INR 311", "INTERNATIONAL FINANCE AND POLITICS OF FOREIGN AIDS"),
@@ -37,7 +45,8 @@ CURRICULUM: dict[str, list[tuple[str, str]]] = {
         ("INR 331", "ELEMENTS OF CONTEMPORARY GLOBAL ISSUES"),
         ("INR 301", "GLOBAL TERRORISM AND POLITICAL VIOLENCE"),
     ],
-    "PUBLIC ADMINISTRATION": SHARED_SOCIAL + [
+    "PUBLIC ADMINISTRATION": SHARED_SOCIAL
+    + [
         ("POL 331", "THE GREAT CHINESE ECONOMY"),
         ("POL 301", "WORLD POLITICS"),
         ("INR 311", "INTERNATIONAL FINANCE AND POLITICS OF FOREIGN AIDS"),
@@ -45,7 +54,8 @@ CURRICULUM: dict[str, list[tuple[str, str]]] = {
         ("INR 331", "ELEMENTS OF CONTEMPORARY GLOBAL ISSUES"),
         ("INR 301", "GLOBAL TERRORISM AND POLITICAL VIOLENCE"),
     ],
-    "BUSINESS ADMINISTRATION": SHARED_SOCIAL + [
+    "BUSINESS ADMINISTRATION": SHARED_SOCIAL
+    + [
         ("BUS 304", "BUSINESS PORT FOLIO MANAGEMENT"),
         ("ECN 312", "MANAGERIAL ECONOMICS"),
         ("BUS 322", "BUSINESS ETHICS AND SOCIAL RESPONSIBILITIES"),
@@ -57,53 +67,93 @@ CURRICULUM: dict[str, list[tuple[str, str]]] = {
 
 
 def dept_code(name: str) -> str:
-    return "".join(p[0] for p in name.split()).upper()[:6]
+    return "".join(part[0] for part in name.split()).upper()[:6]
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--base-url", default="http://localhost:8000")
-    ap.add_argument("--email", required=True)
-    ap.add_argument("--password", required=True)
-    args = ap.parse_args()
+def get_or_create_admin(db) -> User:
+    admin_email = os.getenv("SEED_ADMIN_EMAIL", "admin@example.com")
+    admin_password = os.getenv("SEED_ADMIN_PASSWORD", "admin123")
+    admin_name = os.getenv("SEED_ADMIN_NAME", "System Admin")
 
-    s = requests.Session()
-    s.headers["Authorization"] = "Bearer " + s.post(
-        f"{args.base_url}/auth/token",
-        data={"username": args.email, "password": args.password},
-    ).json()["access_token"]
+    admin = db.query(User).filter(User.email == admin_email).first()
+    if admin:
+        return admin
 
-    # Pick any lecturer/admin to assign as default course lecturer
-    users = s.get(f"{args.base_url}/admin/users").json()
-    lecturer_id = next(u["id"] for u in users if u["role"] in ("lecturer", "admin"))
+    admin = User(
+        email=admin_email,
+        name=admin_name,
+        role=Role.admin,
+        hashed_pw=hash_password(admin_password),
+        department_id=None,
+    )
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    return admin
 
-    total_courses = 0
 
-    for dept_name, courses in CURRICULUM.items():
-        # Create department
-        res = s.post(
-            f"{args.base_url}/admin/departments",
-            params={"name": dept_name, "code": dept_code(dept_name)},
+def get_or_create_department(db, name: str) -> Department:
+    code = dept_code(name)
+    department = db.query(Department).filter(Department.name == name).first()
+    if department:
+        return department
+
+    department = Department(name=name, code=code)
+    db.add(department)
+    db.commit()
+    db.refresh(department)
+    return department
+
+
+def create_missing_courses(db, department_id: int, lecturer_id: int, courses: list[tuple[str, str]]) -> int:
+    created = 0
+    for code, title in courses:
+        existing = (
+            db.query(Course)
+            .filter(Course.department_id == department_id, Course.code == code)
+            .first()
         )
-        res.raise_for_status()
-        dept_id = res.json()["id"]
-
-        # Create every course directly under this department
-        for code, title in courses:
-            res = s.post(
-                f"{args.base_url}/courses/",
-                json={
-                    "code": code,
-                    "title": title,
-                    "description": "Placeholder created from timetable",
-                    "department_id": dept_id,
-                    "lecturer_id": lecturer_id,
-                },
+        if existing:
+            continue
+        db.add(
+            Course(
+                code=code,
+                title=title,
+                description="Placeholder created from timetable",
+                department_id=department_id,
+                lecturer_id=lecturer_id,
             )
-            res.raise_for_status()
-            total_courses += 1
+        )
+        created += 1
 
-    print(f"Seeded {len(CURRICULUM)} departments and {total_courses} courses")
+    if created:
+        db.commit()
+    return created
+
+
+def main() -> None:
+    Base.metadata.create_all(bind=engine)
+
+    with SessionLocal() as db:
+        admin = get_or_create_admin(db)
+        admin_email = admin.email
+
+        departments_created = 0
+        courses_created = 0
+
+        for dept_name, courses in CURRICULUM.items():
+            before = db.query(Department).filter(Department.name == dept_name).first()
+            department = get_or_create_department(db, dept_name)
+            if before is None:
+                departments_created += 1
+            courses_created += create_missing_courses(db, department.id, admin.id, courses)
+
+    print(
+        "Seed complete: "
+        f"admin={admin_email}, "
+        f"departments_created={departments_created}, "
+        f"courses_created={courses_created}"
+    )
 
 
 if __name__ == "__main__":

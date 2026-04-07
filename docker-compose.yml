@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: sh -c "python scripts/seed_departments_courses.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     env_file:
       - .env
     environment:
