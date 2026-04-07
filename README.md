@@ -56,7 +56,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-This starts FastAPI (`web`), Celery (`worker`), Redis, and PostgreSQL.
+This starts FastAPI (`web`), Celery (`worker`), Redis, and PostgreSQL. On startup, the web container runs `scripts/seed_departments_courses.py` once to ensure an admin, departments, and courses are present (idempotent).
 
 ### Running without Docker
 
@@ -76,11 +76,13 @@ redis-server
 ### Seed data
 
 ```bash
-python scripts/seed_departments_courses.py \
-    --base-url http://localhost:8000 \
-    --email admin@example.com \
-    --password yourpassword
+python scripts/seed_departments_courses.py
 ```
+
+Optional environment variables:
+- `SEED_ADMIN_EMAIL` (default: `admin@example.com`)
+- `SEED_ADMIN_PASSWORD` (default: `admin123`)
+- `SEED_ADMIN_NAME` (default: `System Admin`)
 
 ---
 
